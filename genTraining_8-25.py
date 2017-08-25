@@ -23,6 +23,7 @@ from arcpy import env
 from arcpy.sa import *
 arcpy.env.overwriteOutput = True
 from tableJoin import one_to_one_join
+from random import randint
 
 #-----------------------------------------------
 # Set scratch workspace and environment settings
@@ -57,6 +58,7 @@ heights = os.path.join(outputs, "heights.tif")
 
 # Max number of training samples
 num_training = 100
+sample_type = "random" #OPTIONS = ["random", "all"]
 
 #-----------------------------------------------
 # Outputs
@@ -153,8 +155,8 @@ ground_mask_resample = os.path.join(scratchgdb, "ground_mask_resample")
 min_cell_area = int(float(str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", "")))**2)+1
 where_clause = "Shape_Area > " + str(min_cell_area)
 
-#Create masks for ground(<2ft) and nonground (>2ft) features
-ground_ht_threshold = 2
+#Create masks for ground and nonground features according to ground_ht_threshold
+ground_ht_threshold = 2 #ft
 
 mask = SetNull(Int(heights),Int(heights),"VALUE > " + str(ground_ht_threshold))
 arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
@@ -292,10 +294,6 @@ for field in image_enhancements:
     inValueRaster = ((Float(naip_b4))-(Float(naip_b2))) / ((Float(naip_b4))+(Float(naip_b2)))
     inValueRaster.save(enhancement_path)
     ie = enhancement_path
-  elif field == "nli":
-    inValueRaster = ((Float(naip_b4)**2) - Float(naip_b1)) / ((Float(naip_b4)**2) + (Float(naip_b1)))
-    inValueRaster.save(enhancement_path)
-    ie = enhancement_path
   elif field == "osavi":
     inValueRaster = normalize((1.5 * (Float(naip_b4) - Float(naip_b1))) / ((Float(naip_b4)) + (Float(naip_b1)) + 0.16))
     inValueRaster.save(enhancement_path)
@@ -315,22 +313,21 @@ arcpy.DefineProjection_management(sms_fc, projection)
 # Fuzzy rule classifier
 #
 #Primitive types = [vegetation, impervious, water, confusion]
+#Land cover types = [tree, shrub, grass, pavement, building, water]
 #
 # Stages:
-#   1. Evalutate primitive type based on IE value
-#   2. Classify object based on majority primitive type
-#   3. Create new shapefile for each primitive type
-#   4. Classify each primitive object based on IE and height
+#   1. Classify object based on majority primitive type
+#   2. Classify each primitive object based on IE and height
 
-def classify(row, stage):
+def classify(stage, field):
   if stage == "primitive":
-    if row == "c_ndvi":
+    if field == "c_ndvi":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        imp = "< -0.05" #[-1, -0.05]
-        veg = "> 0.02"  #[0.02, 1]
-        #con = ""
+        imp = "<= -0.05" #[-1, -0.05]
+        veg = ">= 0.02"  #[0.02, 1]
+        #con = ""       #(-0.05, 0.02)
         #-----------------------------------------------
         return("def landcover(x):\\n"+
                "  if x "+imp+":\\n"+
@@ -340,13 +337,13 @@ def classify(row, stage):
                "  return \"confusion\""
                )
 
-    elif row == "c_ndwi":
+    elif field == "c_ndwi":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        imp = "< 0.66"  #[0.085, 0.66]
-        veg = "< 0.085" #[-1,0.085]
-        #wat = ""    #[0.85, 1]
+        imp = "<= 0.66"  #[0.085, 0.66]
+        veg = "<= 0.085" #[-1, 0.085]
+        #wat = ""    #(0.85, 1)
         #-----------------------------------------------
         return ("def landcover(x):\\n"+
                 "  if x "+veg+":\\n"+
@@ -356,13 +353,13 @@ def classify(row, stage):
                 "  return \"water\""
                 )
     
-    elif row == "c_gndvi":
+    elif field == "c_gndvi":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        imp = "< -0.03" #[-1, -0.03]
-        veg = "> 0.16"  #[0.16, 1]
-        #con = ""
+        imp = "<= -0.03" #[-1, -0.03]
+        veg = ">= 0.16"  #[0.16, 1]
+        #con = ""   #(-0.03, 0.16)
         #-----------------------------------------------
         return ("def landcover(x):\\n"+
                 "  if x "+imp+":\\n"+
@@ -372,12 +369,12 @@ def classify(row, stage):
                 "  return \"confusion\""
                 )
 
-    elif row == "c_osavi":
+    elif field == "c_osavi":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        imp = "< 0"     #[-1,0]
-        veg = "> 0.2"   #[0.2, 1]
+        imp = "<= 0"     #[-1,0]
+        veg = ">= 0.2"   #[0.2, 1]
         #con = ""
         #-----------------------------------------------
         return ("def landcover(x):\\n"+
@@ -388,7 +385,13 @@ def classify(row, stage):
                 "  return \"confusion\""
                 )
     
-    elif row == "stage1":
+    elif field == "prim":
+        # Need to evaluate TCC and height for special cases
+        #   - (dry grass) if under 2ft and TCC == yellow, then veg
+        #   - (dry tree) if above 6ft and tcc == brown greenish, then veg
+        #   - (asphalt)
+        #   - (pool)
+        #   -
         return("def landcover(a,b,c,d):\\n"+
                "  ies = [a,b,c,d]\\n"+
                "  V,I,W,C = 0,0,0,0\\n"+
@@ -418,100 +421,96 @@ def classify(row, stage):
                )
 
   elif stage == "vegetation":
-    if row == "c2_heig":
+    if field == "c2_heig":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        gra = "< 2"
-        shr = "< 6"
+        gra = "<= 2"    #[0, 2]
+        shr = "<= 6"    #(2, 6]
         #tre = ""
         #-----------------------------------------------
         return("def landcover(x):\\n"+
                "  if x "+str(gra)+":\\n"+
-               "    return \"G\"\\n"+
+               "    return \"grass\"\\n"+
                "  elif x "+shr+":\\n"+
-               "    return \"S\"\\n"+
+               "    return \"shrub\"\\n"+
                "  else:\\n"+
-               "    return \"T\""
+               "    return \"tree\""
                )
     
-    elif row == "stage2":
+    elif field == "object":
         return("def landcover(a,b):\\n"+
                "  return a"
                )
 
   elif stage == "impervious":
       
-    if row == "c2_heig":
+    if field == "c2_heig":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        pat = "< 2"
+        pat = "<= 2" #[0, 2]
         #bui = ""
         #-----------------------------------------------
         return("def landcover(x):\\n"+
                "  if x "+pat+":\\n"+
-               "    return \"P\"\\n"+
+               "    return \"path\"\\n"+
                "  else:\\n"+
-               "    return \"B\""
+               "    return \"building\""
                )
     
-    elif row == "c2_ndwi":
+    elif field == "c2_ndwi":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        wat = 0.4 #[0.4, 1]
+        imp = "<= 0.4" #[0, 0.4]
         #-----------------------------------------------
         return ("def landcover(x):\\n"+
-                "  if x > "+str(wat)+":\\n"+
-                "    return \"confusion\"\\n"+
-                "  return \"I\""
+                "  if x "+imp+":\\n"+
+                "    return \"I\"\\n"+
+                "  return \"confusion\""
                 )
 
-    elif row == "stage2":
+    elif field == "object":
         return ("def landcover(a, b):\\n"+
-                "  if a == \"P\" and b == \"I\":\\n"+
-                "    return \"P\"\\n"+
-                "  elif a == \"B\" and b == \"I\":\\n"+
-                "    return \"B\"\\n"+
+                "  if a == \"path\" and b == \"I\":\\n"+
+                "    return \"path\"\\n"+
+                "  elif a == \"building\" and b == \"I\":\\n"+
+                "    return \"building\"\\n"+
                 "  else:\\n"+
                 "    return \"confusion\""
                 )
+
   elif stage == "water":
-    if row == "c2_heig":
+    if field == "c2_heig":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
-        wat = "< 2"
+        wat = "<= 2" #[0, 2]
         #-----------------------------------------------
         return("def landcover(x):\\n"+
                "  if x "+wat+":\\n"+
-               "    return \"W\"\\n"+
+               "    return \"water\"\\n"+
                "  else:\\n"+
                "    return\"confusion\""
                )
     
-    elif row == "c2_ndwi":
+    elif field == "c2_ndwi":
         #-----------------------------------------------
         #-----------------------------------------------
         # Thresholds
         #-----------------------------------------------
         return("def landcover(x):\\n"+
-               "  return \"W\""
+               "  return \"water\""
                )
     
-    elif row == "stage2":
+    elif field == "object":
         return ("def landcover(a, b):\\n"+
                 "  return a"
                 )
 
-
 # -----stage 1--------
-stages = [
-["vegetation", ["G", "S", "T"]],
-["impervious", ["B", "P"]],
-["water", ["W"]]
-]
+primitives = ["vegetation", "impervious", "water"]
 
 #-----------------------------------------------
 #-----------------------------------------------
@@ -531,20 +530,18 @@ for index in s1_indices:
   field = "c_"+index
   fxn = "landcover(!"+index+"!)"
   arcpy.AddField_management(sms_fc, field, "TEXT")
-  label_class = classify(field, stage)
+  label_class = classify(stage, field)
   arcpy.CalculateField_management(sms_fc, field, fxn, "PYTHON_9.3", label_class)
 
 fxn = "landcover(!c_ndvi!, !c_ndwi!, !c_gndvi!, !c_osavi!)"
-label_class = classify("stage1", stage)
-arcpy.AddField_management(sms_fc, "stage1", "TEXT")
-arcpy.CalculateField_management(sms_fc, "stage1", fxn, "PYTHON_9.3", label_class)
+label_class = classify(stage, "prim")
+arcpy.AddField_management(sms_fc, "prim", "TEXT")
+arcpy.CalculateField_management(sms_fc, "prim", fxn, "PYTHON_9.3", label_class)
 
-for classification_stage in stages:
+for primitive in primitives:
 
-  stage = classification_stage[0]
-
-  output = os.path.join(scratchgdb, stage)
-  where_clause = "\"stage1\" = '" + stage + "'"
+  output = os.path.join(scratchgdb, primitive)
+  where_clause = "\"prim\" = '" + primitive + "'"
   arcpy.Select_analysis(sms_fc, output, where_clause)
 
 #-----------------------------------------------
@@ -553,7 +550,13 @@ text = "Executing Stage 2 classification."
 generateMessage(text)
 #-----------------------------------------------
 
+stages = []
+primitives = ["vegetation", "impervious", "water"]
+objects = [["grass", "shrub", "tree"], ["building", "path"], ["water"]]
+for i in range(len(primitives)):
+    stages.append(primitives[i], objects[i])
 merge_lst = []
+
 for classification_stage in stages:
   stage = classification_stage[0]
   landcover = classification_stage[1]
@@ -569,17 +572,17 @@ for classification_stage in stages:
     field = "c2_"+index[:4]
     fxn = "landcover(!"+index+"!)"
     arcpy.AddField_management(stage_output, field, "TEXT")
-    label_class = classify(field, stage)
+    label_class = classify(stage, field)
     arcpy.CalculateField_management(stage_output, field, fxn, "PYTHON_9.3", label_class)
-  label_class = classify("stage2", stage)
-  arcpy.AddField_management(stage_output, "stage2", "TEXT")
+  label_class = classify(stage, "object")
+  arcpy.AddField_management(stage_output, "object", "TEXT")
   fxn = "landcover(!c2_heig!, !c2_ndwi!)"
-  arcpy.CalculateField_management(stage_output, "stage2", fxn, "PYTHON_9.3", label_class)
+  arcpy.CalculateField_management(stage_output, "object", fxn, "PYTHON_9.3", label_class)
 
 
   for i in range(len(landcover)):
     landcover_output = os.path.join(scratchgdb, landcover[i])
-    where_clause = "\"stage2\" = '" + landcover[i] + "'"
+    where_clause = "\"object\" = '" + landcover[i] + "'"
 
     arcpy.Select_analysis(stage_output, landcover_output, where_clause)
     merge_lst.extend([landcover_output])
@@ -589,39 +592,59 @@ for classification_stage in stages:
 text = "Merging all classified layers into one polygon."
 generateMessage(text)
 #-----------------------------------------------
-arcpy.Merge_management(merge_lst, classified_image)
 
 #-----------------------------------------------
 #-----------------------------------------------
-text = "All processes complete."
+# Merging object layers
+#
+arcpy.Merge_management(merge_lst, classified_image)
+
+
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Fuzzy Rule Classifier processes complete."
 generateMessage(text)
 #-----------------------------------------------
 
-#GENERATE TRAINING SAMPLES
-from random import randint
+
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Generating " +str(num_training)+" samples for each landcover class."
+generateMessage(text)
+#-----------------------------------------------
+
+#-----------------------------------------------
+#-----------------------------------------------
+# Generate Training Samples
+#
 
 training_samples = os.path.join(outputs, "training_fc.shp")
 
-#-----------------------------------------------
-#-----------------------------------------------
-text = "Generating " + str(num_training)+" samples for each landcover class."
-generateMessage(text)
-#-----------------------------------------------
 def gen_samples(classes):
-
-  # returns a list of random rows equal to the desired number of training samples
-
-  def gen_training(num_training, num_samples):
-    def rand_samples(count, sample_selection, num_training):
-      while count < num_training:
-        row_num = randint(1, num_samples)
-        if row_num in sample_selection:
-          return rand_samples(count, sample_selection, num_training)
-        sample_selection.append(row_num)
-        count += 1
-      return sample_selection
-    return rand_samples(0, [], num_training)
-
+  def gen_training(num_training, num_samples, sample_type):
+      
+          def choose_samples(count, sample_selection, num_training, sample_type):
+              while count < num_training:
+                  #-----------------------------------------------
+                  #-----------------------------------------------
+                  # Generate Random Samples
+                  #
+                  if sample_type == "random":
+                    row_num = randint(1, num_samples)
+                    if row_num in sample_selection:
+                      return choose_samples(count, sample_selection, num_training, sample_type)
+                    sample_selection.append(row_num)
+                    count += 1
+                  #-----------------------------------------------
+                  #-----------------------------------------------
+                  # Generate All Samples
+                  #
+                  if sample_type == "all":
+                      for i in range(num_training):
+                        sample_selection.append(i+1)
+                      count == num_training
+              return sample_selection
+          return choose_samples(0, [], num_training, sample_type)
   landcover = os.path.join(scratchgdb, classes[0])
   labels = classes[1]
 
@@ -637,7 +660,7 @@ def gen_samples(classes):
       num_samples = int(str(arcpy.GetCount_management(samples)))
 
       if num_samples > 0:
-        row_num = gen_training(num_training, num_samples)
+        row_num = gen_training(num_training, num_samples, sample_type)
         where_clause = "("
         for row in row_num:
             where_clause += str(row) + ", "
@@ -662,6 +685,11 @@ for classes in stages:
 text = "Merging newly created training samples into one layer."
 generateMessage(text)
 #-----------------------------------------------
+
+#-----------------------------------------------
+#-----------------------------------------------
+# Merging training samples
+#
 arcpy.Merge_management(training_merge, training_samples)
 
 # Layer stack
