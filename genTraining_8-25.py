@@ -67,13 +67,13 @@ coarsening_size = "5"
 # Outputs
 #-----------------------------------------------
 
-#segmentation
+#segmented naip
 naip_sms = os.path.join(scratchgdb, "naip_sms")
 
-#objects
-sms_fc = os.path.join(scratchgdb, "sms_fc") #sms feature class
+#feature objects
+sms_fc = os.path.join(scratchgdb, "sms_fc")
 
-#classified objects
+#classified objects (training_samples)
 classified_image = os.path.join(outputs, "classified_image.shp")
 
 #-----------------------------------------------
@@ -396,9 +396,6 @@ def classify(stage, field):
         # Need to evaluate TCC and height for special cases
         #   - (dry grass) if under 2ft and TCC == yellow, then veg
         #   - (dry tree) if above 6ft and tcc == brown greenish, then veg
-        #   - (asphalt)
-        #   - (pool)
-        #   -
         return("def landcover(a,b,c,d):\\n"+
                "  ies = [a,b,c,d]\\n"+
                "  V,I,W,C = 0,0,0,0\\n"+
