@@ -60,6 +60,9 @@ heights = os.path.join(outputs, "heights.tif")
 num_training = 100
 sample_type = "random" #OPTIONS = ["random", "all"]
 
+# Coarsen cell size in meters
+coarsening_size = "5"
+
 #-----------------------------------------------
 # Outputs
 #-----------------------------------------------
@@ -95,15 +98,19 @@ def generateMessage(text):
 #
 if projection == "UTMZ10":
   scale_height = 0.3048
+  unit = meter
   projection = "PROJCS['NAD_1983_UTM_Zone_10N',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Transverse_Mercator'],PARAMETER['False_Easting',500000.0],PARAMETER['False_Northing',0.0],PARAMETER['Central_Meridian',-123.0],PARAMETER['Scale_Factor',0.9996],PARAMETER['Latitude_Of_Origin',0.0],UNIT['Meter',1.0]]"
 elif projection == "UTMZ11":
   scale_height = 0.3048
+  unit = meter
   projection = "PROJCS['NAD_1983_UTM_Zone_11N',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Transverse_Mercator'],PARAMETER['False_Easting',500000.0],PARAMETER['False_Northing',0.0],PARAMETER['Central_Meridian',-117.0],PARAMETER['Scale_Factor',0.9996],PARAMETER['Latitude_Of_Origin',0.0],UNIT['Meter',1.0]]"
 elif projection == "SPIII":
   scale_height = 1
+  unit = feet
   projection = "PROJCS['NAD_1983_StatePlane_California_III_FIPS_0403_Feet',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Lambert_Conformal_Conic'],PARAMETER['False_Easting',6561666.666666666],PARAMETER['False_Northing',1640416.666666667],PARAMETER['Central_Meridian',-120.5],PARAMETER['Standard_Parallel_1',37.06666666666667],PARAMETER['Standard_Parallel_2',38.43333333333333],PARAMETER['Latitude_Of_Origin',36.5],UNIT['Foot_US',0.3048006096012192]]"
 elif projection == "SPIV":
   scale_height = 1
+  unit = feet
   projection = "PROJCS['NAD_1983_StatePlane_California_VI_FIPS_0406_Feet',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Lambert_Conformal_Conic'],PARAMETER['False_Easting',6561666.666666666],PARAMETER['False_Northing',1640416.666666667],PARAMETER['Central_Meridian',-116.25],PARAMETER['Standard_Parallel_1',32.78333333333333],PARAMETER['Standard_Parallel_2',33.88333333333333],PARAMETER['Latitude_Of_Origin',32.16666666666666],UNIT['Foot_US',0.3048006096012192]]"
 
 
@@ -716,18 +723,14 @@ arcpy.DefineProjection_management(composite, projection)
 
 #-----------------------------------------------
 #-----------------------------------------------
-text = "Resampling NAIP to 5m."
+text = "Coarsening NAIP to "+coarsening_size+"m."
 generateMessage(text)
 #-----------------------------------------------
-naip_5m = os.path.join(outputs,"naip_5m.tif")
 
-if "'Meter'" in projection:
-    cell_size_5m = "5 5"
-elif "'Foot_US'" in projection:
-    cell_size_5m = str(5*3.28084)+" "+str(5*3.28084)
+coarsen_naip = os.path.join(outputs,"naip_"+coarsening_size+"m.tif")
+coarse_cell_size = coarsening_size+" "+coarsening_size
 
-arcpy.Resample_management(naip, naip_5m, cell_size_5m, "BILINEAR")
-
+arcpy.Resample_management(naip, coarsen_naip, coarse_cell_size, "BILINEAR")
 
 # #FORMAT TRAINING
 # svm_training = os.path.join(scratchgdb, "svm_training.shp")
