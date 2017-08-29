@@ -24,6 +24,7 @@ from arcpy.sa import *
 arcpy.env.overwriteOutput = True
 from tableJoin import one_to_one_join
 from random import randint
+from genFuelComplex_8-28 import fuelComplex
 
 #-----------------------------------------------
 # Set scratch workspace and environment settings
@@ -201,6 +202,7 @@ ground_mask_poly = []
 
 for surface in surfaces:
 
+# Try running SMS on each surface
   sms_raster = os.path.join(scratchgdb, surface+"_sms_raster")
   naip_fc =  os.path.join(scratchgdb, surface + "_naip_fc")
   mask_poly = os.path.join(scratchgdb, surface+ "_mask_poly")
@@ -716,20 +718,26 @@ for layer in layers:
 arcpy.CompositeBands_management(bands, composite)
 arcpy.DefineProjection_management(composite, projection)
 
-# Resample NAIP
-
 #-----------------------------------------------
 #-----------------------------------------------
 text = "Coarsening NAIP to "+coarsening_size+"m."
 generateMessage(text)
 #-----------------------------------------------
 
+#-----------------------------------------------
+#-----------------------------------------------
+# Coarsen NAIP Pixel size
+#
+
 coarsen_naip = os.path.join(outputs,"naip_"+coarsening_size+"m.tif")
 coarse_cell_size = coarsening_size+" "+coarsening_size
 
 arcpy.Resample_management(naip, coarsen_naip, coarse_cell_size, "BILINEAR")
 
-# #FORMAT TRAINING
+
+#-----------------------------------------------
+#-----------------------------------------------
+# FORMAT TRAINING
 # svm_training = os.path.join(scratchgdb, "svm_training.shp")
 # arcpy.FeatureClassToFeatureClass_conversion (training_samples, outputs, "svm_training.shp")
 # training_fields = [["Classname", "TEXT"], ["Classvalue", "LONG"], ["RED", "LONG"], ["GREEN", "LONG"], ["BLUE", "LONG"], ["Count", "LONG"]]
@@ -749,6 +757,12 @@ arcpy.Resample_management(naip, coarsen_naip, coarse_cell_size, "BILINEAR")
 #arcpy.AddMessage("All training samples created.")
 #arcpy.Merge_management(testing_merge, testing_samples)
 #arcpy.AddMessage("All testing samples created.")
+
+#-----------------------------------------------
+#-----------------------------------------------
+# Generate Fuel Model
+#
+#fuelComplex("13")
 
 
 #-----------------------------------------------
