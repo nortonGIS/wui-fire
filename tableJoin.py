@@ -1,0 +1,27 @@
+#-------------------------------------------------------------------------------
+# Name:        tableJoin Tool
+# Purpose:     This tool adds a new column to the desired table and updates the 
+# 				rows with values from a 1:1 matched table from zonal statistics.
+#			
+#
+# Author:      Peter Norton
+#
+# Created:     05/25/2017
+# Copyright:   (c) Peter Norton 2017
+#-------------------------------------------------------------------------------
+
+def one_to_one_join(table1, table2, attr, data_type):
+	#add column
+	arcpy.AddField_management(table1, attr, data_type)
+
+	#update column
+	searchcursor = arcpy.SearchCursor(table2)
+	searchrow = searchcursor.next()
+	updatecursor = arcpy.UpdateCursor(table1)
+	updaterow = updatecursor.next()
+	while searchrow:
+
+		updaterow.setValue(attr, searchrow.getValue(attr))
+		updatecursor.updateRow(updaterow)
+		searchrow = searchcursor.next()
+		updaterow = updatecursor.next()
