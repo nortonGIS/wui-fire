@@ -9,14 +9,14 @@
 # Copyright:   (c) Peter Norton 2017
 #-------------------------------------------------------------------------------
 
+import arcpy
 import os
 import sys
-import arcpy
+import ctypes
 from arcpy import env
 from arcpy.sa import *
-
-import ctypes
-import arcpy as a
+arcpy.env.overwriteOutput = True
+from tableJoin import one_to_one_join, replace
 
 
 scriptpath = sys.path[0]
@@ -104,46 +104,50 @@ def generateMessage(text):
 # arcpy.AddMessage("Fuel Model raster generated.")
 
 
-def classify(x):
-	#53 Standard Fuel Models
-	#if x == "fuel":
-	#	return ("def fuelmodel(x):\\n  if x == \"B\":\\n    return 13\\n  elif x == \"P\": \\n    return 99\\n  elif x == \"W\":\\n    return 98\\n  elif x == \"HG\":\\n    return 105\\n  elif x == \"HS\":\\n    return 143\\n  elif x == \"HT\":\\n    return 9\\n  elif x == \"SG\":\\n    return 122\\n  elif x == \"SS\":\\n    return 145\\n  elif x == \"ST\":\\n    return 165\\n")
-	
-	# 13 Anderson
-	if x == "fuel":
-		return ("def classify(x):\\n"+
-                "  if x == \"B\":\\n"+
-                "    return 13\\n"+
-                "  elif x == \"P\": \\n"+
-                "    return 99\\n"+
-                "  elif x == \"W\":\\n"+
-                "    return 98\\n"+
-                "  elif x == \"G\":\\n"+
-                "    return 1\\n"+
-                "  elif x == \"S\":\\n"+
-                "    return 6\\n"+
-                "  elif x == \"T\":\\n"+
-                "    return 8\\n"
-                )
-    
-	elif x == "canopy":
-		return ("def classify(x):\\n"+
-                "  if x == \"T\" or x == \"B\":\\n"+
-                "    return 100\\n"+
-                "  return 0"
-                )
-
-	elif x == "stand":
-		return("def classify(x):\\n"+
-               "  return x"
-               )
-
-# Take classified SVM, join to SMS_fc, then join classified_image to SMS_fc
+#Take classified svm, join to classified_image, if objects <> "confused", replace(classified_image, "svm", "object")
 
 #-----------------------------------------------
 #-----------------------------------------------
 # Generate fuel complex
 #
+
+def classify(x):
+    
+    # Anderson 13
+    building = "13"
+    tree = "8"
+    shrub = "6"
+    grass = "1"
+    water = "98"
+    pavement = "99"
+        
+        if x == "fuel":
+            return ("def classify(x):\\n"+
+                    "  if x == \"building\":\\n"+
+                    "    return "+building+"\\n"+
+                    "  elif x == \"P\": \\n"+
+                    "    return "+pavement+"\\n"+
+                    "  elif x == \"water\":\\n"+
+                    "    return "+water+"\\n"+
+                    "  elif x == \"grass\":\\n"+
+                    "    return "+grass+"\\n"+
+                    "  elif x == \"shrub\":\\n"+
+                    "    return "+shrub+"\\n"+
+                    "  elif x == \"tree\":\\n"+
+                    "    return "+tree+"\\n"
+                    )
+    
+        elif x == "canopy":
+            return ("def classify(x):\\n"+
+                    "  if x == \"tree\" or x == \"building\":\\n"+
+                    "    return 100\\n"+
+                    "  return 0"
+                    )
+        
+        elif x == "stand":
+            return("def classify(x):\\n"+
+                   "  return x"
+                   )
 
 def fuelComplex(model, sms_fc):
     model = "13"
@@ -223,7 +227,7 @@ landscape_file = created.LCP
 # Burn in FlamMap
 #
 
-dll = ctypes.cdll.LoadLibrary("C:\\Temp\\FlamMapF.dll") #Need to change to FLamMap folder
+dll = ctypes.cdll.LoadLibrary("C:\\Temp\\FlamMapF.dll") #Need to change to FlamMap folder
 fm = getattr(dll, "?Run@@YAHPBD000NN000HHN@Z")
 fm.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_double, ctypes.c_double, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_double]
 fm.restype = ctypes.c_int
@@ -243,13 +247,27 @@ Res = -1.0
 
 e = fm(Landscape, FuelMoist, OutputFile, FuelModel, Windspeed, WindDir, Weather, WindFileName, DateFileName, FoliarMoist, CalcMeth, Res)
 if e > 0:
-    a.AddError("Problem with parameter {0}".format(e))
+    arcpy.AddError("Problem with parameter {0}".format(e))
 
-for root, dirs, fm_outputs in os.walk(outputs):
+burn_metrics = [ros, fml, fli]
+
+for root, dirs, fm_outputs in os.walk(outputs): #Check to confirm outputs are saved here
     for flamMap_output in fm_outputs:
-        if flamMap_output[-4:] == ".ROS":
-            os.rename(flamMap_output, "ros.asc")
-        elif flamMap_output[-4:] == ".FML":
-                      os.rename(flamMap_output, "fml.asc")
-        elif flamMap_output[-4:] == ".FLI":
-            os.rename(flamMap_output, "fli.asc")
+        if flamMap_output[:-3].lower() in burn_metrics:
+            metric = flamMap_output[-4:].lower()
+            burn_ascii = os.path.join(scratchgdb, metric+".asc")
+            burn_ras = os.path.join(scratchgdb, metric+".tif")
+            outTable = os.path.join(scratchgdb, "zonal_"+metric)
+            
+            os.rename(flamMap_output, burn_ascii)
+
+            arcpy.ASCIIToRaster( burn_ascii,  burn_ras, "FLOAT")
+            arcpy.DefineProjection_management(burn_ras, projection)
+            z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", burn_ras, outTable, "NODATA", "MAXIMUM")
+            arcpy.AddField_management(outTable, metric, "FLOAT")
+            arcpy.CalculateField_management(outTable, metric, "[MAX]")
+            one_to_one_join(sms_fc, outTable, metric, "FLOAT")
+
+
+
+
