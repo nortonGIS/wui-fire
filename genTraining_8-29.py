@@ -333,7 +333,7 @@ def createImageEnhancements(x, join, cell_size, created_enhancements):
             one_to_one_join(sms_fc, outTable, field, "FLOAT")
     return created_enhancements
 
-created_enhancements_1m = ImageEnhancements(image_enhancements, "yes", "1", [])
+created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
 arcpy.DefineProjection_management(sms_fc, projection)
 
 #-----------------------------------------------
@@ -353,16 +353,16 @@ def classify(stage, landcover, field):
           #-----------------------------------------------
           #-----------------------------------------------
           # Thresholds
-          imp = ">= 250" #[250,255]
-          veg = "<= 249"  #[0, 249]
+          healthy = ">= 250" #[250,255]
+          dry = "<= 249"  #[0, 249]
           #con = ""
           #-----------------------------------------------
           return("def landcover(x):\\n"+
-                 "  if x "+imp+":\\n"+
-                 "    return \"impervious\"\\n"+
-                 "  elif x "+veg+":\\n"+
+                 "  if x "+healthy+":\\n"+
+                 "    return \"healthy\"\\n"+
+                 "  elif x "+dry+":\\n"+
                  "    return \"senescent\"\\n"+
-                 "  return \"vegetation\""
+                 "  return \"impervious\""
                  )
   
     elif field == "s1_ndvi":
@@ -438,7 +438,7 @@ def classify(stage, landcover, field):
                "    if ie == \"vegetation\":\\n"+
                "      V += 1\\n"+
                "    elif ie == \"impervious\":\\n"+
-               "      if e == \"street\":\\n"+
+               "      if e == \"impervious\":\\n"+
                "        I += 1\\n"+
                "      elif e == \"senescent\":\\n"+
                "        V += 1\\n"+
@@ -500,7 +500,8 @@ def classify(stage, landcover, field):
     
       elif field == "2":
         return("def landcover(a,b):\\n"+
-               "  return a"
+               "  if b != \"confusion\":\\n"+
+               "    return a "
                )
 
     elif landcover == "impervious":
