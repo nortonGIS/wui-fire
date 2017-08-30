@@ -24,7 +24,7 @@ from arcpy.sa import *
 arcpy.env.overwriteOutput = True
 from tableJoin import one_to_one_join
 from random import randint
-from genFuelComplex_8-28 import fuelComplex
+#from genFuelComplex_8-28 import fuelComplex
 
 #-----------------------------------------------
 # Set scratch workspace and environment settings
@@ -121,6 +121,12 @@ elif projection == "SPIV":
 # Resample raw_NAIP and raw_heights to align cells
 # Resampled layers will be saved to output folder
 #
+
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Aligning cells."
+generateMessage(text)
+#-----------------------------------------------
 naip_cell_size = str(arcpy.GetRasterProperties_management(raw_naip, "CELLSIZEX", "")) + " " + str(arcpy.GetRasterProperties_management(raw_naip, "CELLSIZEX", ""))
 arcpy.Resample_management(raw_naip, naip, naip_cell_size, "")
 arcpy.DefineProjection_management(naip, projection)
@@ -128,7 +134,7 @@ arcpy.DefineProjection_management(naip, projection)
 arcpy.env.snapRaster = naip
 arcpy.Resample_management(raw_heights, heights, naip_cell_size, "")
 scaled_heights = Float(heights) * scale_height
-arcpy.DefineProjection_management(scale_heights, projection)
+arcpy.DefineProjection_management(scaled_heights, projection)
 #-----------------------------------------------
 
 #-----------------------------------------------
@@ -279,43 +285,47 @@ image_enhancements = ["ndvi", "ndwi", "gndvi", "osavi", "height"]
 def normalize(index):
     return (2 * (Float(index) - Float(index.minimum)) / (Float(index.maximum) - Float(index.minimum))) - 1
 
-for field in image_enhancements:
+def createImageEnhancements(x, join, cell_size, created_enhancements):
 
-  enhancement_path = os.path.join(scratchgdb, field+"_raster")
-  outTable = os.path.join(scratchgdb, "zonal_"+field)
+    for field in image_enhancements:
+        enhancement_path = os.path.join(scratchgdb, field+"_raster"+"_"+cell_size+"m")
+        outTable = os.path.join(scratchgdb, "zonal_"+field)
 
-  # -----------------------------------------------
-  # -----------------------------------------------
-  text = "Calculating and joining mean " + field + " to each object."
-  generateMessage(text)
-  # -----------------------------------------------
+        # -----------------------------------------------
+        # -----------------------------------------------
+        text = "Calculating and joining mean " + field + " to each object."
+        generateMessage(text)
+        # -----------------------------------------------
 
-  ie = os.path.join(scratchgdb, field)
+        if field == "ndvi":
+            inValueRaster = ((Float(naip_b4))-(Float(naip_b1))) / ((Float(naip_b4))+(Float(naip_b1)))
+            inValueRaster.save(enhancement_path)
+            ie = enhancement_path
+        elif field == "ndwi":
+            inValueRaster = ((Float(naip_b2))-(Float(naip_b4))) / ((Float(naip_b2))+(Float(naip_b4)))
+            inValueRaster.save(enhancement_path)
+                ie = enhancement_path
+        elif field == "gndvi":
+            inValueRaster = ((Float(naip_b4))-(Float(naip_b2))) / ((Float(naip_b4))+(Float(naip_b2)))
+            inValueRaster.save(enhancement_path)
+            ie = enhancement_path
+        elif field == "osavi":
+            inValueRaster = normalize((1.5 * (Float(naip_b4) - Float(naip_b1))) / ((Float(naip_b4)) + (Float(naip_b1)) + 0.16))
+            inValueRaster.save(enhancement_path)
+            ie = enhancement_path
+        elif field == "height":
+            enhancement_path = heights
 
-  if field == "ndvi":
-    inValueRaster = ((Float(naip_b4))-(Float(naip_b1))) / ((Float(naip_b4))+(Float(naip_b1)))
-    inValueRaster.save(enhancement_path)
-    ie = enhancement_path
-  elif field == "ndwi":
-    inValueRaster = ((Float(naip_b2))-(Float(naip_b4))) / ((Float(naip_b2))+(Float(naip_b4)))
-    inValueRaster.save(enhancement_path)
-    ie = enhancement_path
-  elif field == "gndvi":
-    inValueRaster = ((Float(naip_b4))-(Float(naip_b2))) / ((Float(naip_b4))+(Float(naip_b2)))
-    inValueRaster.save(enhancement_path)
-    ie = enhancement_path
-  elif field == "osavi":
-    inValueRaster = normalize((1.5 * (Float(naip_b4) - Float(naip_b1))) / ((Float(naip_b4)) + (Float(naip_b1)) + 0.16))
-    inValueRaster.save(enhancement_path)
-    ie = enhancement_path
-  elif field == "height":
-    enhancement_path = heights
+        created_enhancements.append(enhancement_path)
+        if join == "yes":
+            z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", enhancement_path, outTable, "NODATA", "MEAN")
 
-  z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", enhancement_path, outTable, "NODATA", "MEAN")
+            arcpy.AddField_management(outTable, field, "FLOAT")
+            arcpy.CalculateField_management(outTable, field, "[MEAN]")
+            one_to_one_join(sms_fc, outTable, field, "FLOAT")
+    return created_enhancements
 
-  arcpy.AddField_management(outTable, field, "FLOAT")
-  arcpy.CalculateField_management(outTable, field, "[MEAN]")
-  one_to_one_join(sms_fc, outTable, field, "FLOAT")
+created_enhancements_1m = ImageEnhancements(image_enhancements, "yes", "1", [])
 arcpy.DefineProjection_management(sms_fc, projection)
 
 #-----------------------------------------------
@@ -445,8 +455,8 @@ def classify(stage, landcover, field):
                )
 
   elif stage == "2":
-    if landcover = "vegetation":
-     if field == "s2_grid":
+    if landcover == "vegetation":
+      if field == "s2_grid":
           #-----------------------------------------------
           #-----------------------------------------------
           # Thresholds
@@ -480,7 +490,7 @@ def classify(stage, landcover, field):
                "    return \"tree\""
                )
     
-       elif field == "2":
+      elif field == "2":
         return("def landcover(a,b):\\n"+
                "  return a"
                )
@@ -557,7 +567,7 @@ def createClassMembership(stage, field, field_lst, output):
         fxn = "landcover("+field_lst[:-2]+")"
         label_class = classify(stage, "", field)
     else:
-        field = "s"+stage"_"+field[:4]
+        field = "s"+stage+"_"+field[:4]
         field_lst += "!"+field+"!, "
         fxn = "landcover(!"+field+"!)"
         label_class = classify(stage, landcover, field)
@@ -583,11 +593,11 @@ s1_indices = ["ndvi", "ndwi", "gndvi", "osavi", "gridcode"]
 s2_indices = ["height", "ndwi", "gridcode"]
 
 for stage in stages:
-  #-----------------------------------------------
-  #-----------------------------------------------
-  text = "Executing Stage "+str(stage)+" classification."
-  generateMessage(text)
-  #-----------------------------------------------
+    #-----------------------------------------------
+    #-----------------------------------------------
+    text = "Executing Stage "+str(stage)+" classification."
+    generateMessage(text)
+    #-----------------------------------------------
     if stage == "1":
       s1_indices.append(stage)
       field_lst = ""
@@ -598,7 +608,7 @@ for stage in stages:
             #-----------------------------------------------
             #-----------------------------------------------
             text = "Creating primitive-type objects."
-                generateMessage(text)
+            generateMessage(text)
             #-----------------------------------------------
             createClassMembership(stage, field, field_lst, sms_fc)
 
@@ -655,13 +665,6 @@ generateMessage(text)
 # Merging object layers
 #
 arcpy.Merge_management(merge_lst, classified_image)
-
-
-#-----------------------------------------------
-#-----------------------------------------------
-text = "Fuzzy Rule Classifier processes complete."
-generateMessage(text)
-#-----------------------------------------------
 
 
 #-----------------------------------------------
@@ -753,36 +756,41 @@ arcpy.Merge_management(training_merge, training_samples)
 
 #-----------------------------------------------
 #-----------------------------------------------
-text = "Creating a composite."
-generateMessage(text)
-#-----------------------------------------------
-composite = os.path.join(outputs, "composite.tif")
-
-layers = ["ndvi", "ndwi", "gndvi"]
-bands = []
-
-for layer in layers:
-  sms_raster = os.path.join(scratchgdb, "sms_"+layer)
-  arcpy.PolygonToRaster_conversion(sms_fc, layer, sms_raster, "CELL_CENTER", "", cell_size)
-  bands.extend([sms_raster])
-
-arcpy.CompositeBands_management(bands, composite)
-arcpy.DefineProjection_management(composite, projection)
-
-#-----------------------------------------------
-#-----------------------------------------------
 text = "Coarsening NAIP to "+coarsening_size+"m."
 generateMessage(text)
 #-----------------------------------------------
+
+def createLayerComposite(bands):
+    
+    composite = os.path.join(outputs, "composite.tif")
+    arcpy.CompositeBands_management(bands, composite)
+    arcpy.DefineProjection_management(composite, projection)
 
 #-----------------------------------------------
 #-----------------------------------------------
 # Coarsen NAIP Pixel size
 #
 if coarsen == "yes":
+    image_enhancements = ["ndvi", "ndwi", "gndvi"]]
     coarsen_naip = os.path.join(outputs,"naip_"+coarsening_size+"m.tif")
     coarse_cell_size = coarsening_size+" "+coarsening_size
     arcpy.Resample_management(naip, coarsen_naip, coarse_cell_size, "BILINEAR")
+    created_enhancements_5m = createImageEnhancements(image_enhancements, "no", coarsening_size, [])
+    
+    #-----------------------------------------------
+    #-----------------------------------------------
+    text = "Creating a 5m composite."
+    generateMessage(text)
+    #-----------------------------------------------
+
+    createLayerComposite(created_enhancements_5m)
+
+else:
+    createLayerComposite(created_enhancements_1m)
+
+
+
+
 
 #-----------------------------------------------
 #-----------------------------------------------
