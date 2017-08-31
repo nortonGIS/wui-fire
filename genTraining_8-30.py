@@ -155,12 +155,12 @@ while zones:
     where_clause = "OBJECTID == " + zone_num
     arcpy.Select_analysis(bnd_zones, zone, where_clause)
     
-    naip_zone = os.path.join(outputs, "naip_zone_"+str(zone_num)+".tif"
+    naip_zone = os.path.join(outputs, "naip_zone_"+str(zone_num)+".tif")
     naip_zone_b1 = os.path.join(naip_zone, "Band_1")
     naip_zone_b2 = os.path.join(naip_zone, "Band_2")
     naip_zone_b3 = os.path.join(naip_zone, "Band_3")
     naip_zone_b4 = os.path.join(naip_zone, "Band_4")                         
-    height_zone = os.path.join(outputs, "height_zone_"+str(zone_num)+".tif"                         
+    height_zone = os.path.join(outputs, "height_zone_"+str(zone_num)+".tif")                         
     this = ExtractByMask(naip, zone)
     this.save(naip_zone)
     this = ExtractByMask(height, zone)
