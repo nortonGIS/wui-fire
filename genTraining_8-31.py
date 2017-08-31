@@ -79,9 +79,6 @@ naip_sms = os.path.join(scratchgdb, "naip_sms")
 #feature objects
 sms_fc = os.path.join(scratchgdb, "sms_fc")
 
-#classified objects (training_samples)
-classified_image = os.path.join(outputs, "classified_image.shp")
-
 #-----------------------------------------------
 # Alert function
 #-----------------------------------------------
@@ -393,9 +390,8 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            imp = "-0.6 <= x <= -0.06" #[-1, -0.05]
+            imp = "-0.88 <= x <= -0.06" #[-1, -0.05]
             veg = "-0.18 <= x <= 0.5"  #[0.02, 1]
-            wat = "-0.88 <= x <= -0.06"
             #-----------------------------------------------
             return ("def landcover(x):\\n"+
                    "  membership = \"\"\\n"+
@@ -403,8 +399,6 @@ while zones:
                    "    membership += \"I\"\\n"+
                    "  if "+veg+":\\n"+
                    "    membership += \"V\"\\n"+
-                   "  if "+wat+":\\n"+
-                   "    membership += \"W\"\\n"+
                    "  return membership\\n"
                    )
 
@@ -412,9 +406,8 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            imp = "0.1 <= x <= 0.6"  #[0.085, 0.66]
+            imp = "0.1 <= x <= 0.91"  #[0.085, 0.66]
             veg = "-0.41 <= x <= 0.18" #[-1, 0.085]
-            wat = "0.37 <= x <= 0.91"    #(0.85, 1)
             #-----------------------------------------------
             return ("def landcover(x):\\n"+
                    "  membership = \"\"\\n"+
@@ -422,8 +415,6 @@ while zones:
                    "    membership += \"I\"\\n"+
                    "  if "+veg+":\\n"+
                    "    membership += \"V\"\\n"+
-                   "  if "+wat+":\\n"+
-                   "    membership += \"W\"\\n"+
                    "  return membership\\n"
                    )
         
@@ -431,9 +422,8 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            imp = "-0.61 <= x <= -0.17"  #[0.085, 0.66]
+            imp = "-0.694<= x <= -0.17"  #[0.085, 0.66]
             veg = "-0.3 <= x <= 0.38" #[-1, 0.085]
-            wat = "-0.94 <= x <= -0.39"    #(0.85, 1)
             #-----------------------------------------------
             return ("def landcover(x):\\n"+
                    "  membership = \"\"\\n"+
@@ -441,8 +431,6 @@ while zones:
                    "    membership += \"I\"\\n"+
                    "  if "+veg+":\\n"+
                    "    membership += \"V\"\\n"+
-                   "  if "+wat+":\\n"+
-                   "    membership += \"W\"\\n"+
                    "  return membership\\n"
                    )
 
@@ -450,9 +438,8 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            imp = "-0.15 <= x <= 0.76"  #[0.085, 0.66]
-            veg = "-0.63 <= x <= 0.02" #[-1, 0.085]
-            wat = "-0.94 <= x <= -0.3"    #(0.85, 1)
+            imp = "-0.94 <= x <= 0.02"  #[0.085, 0.66]
+            veg = "-0.15 <= x <= 0.76" #[-1, 0.085]
             #-----------------------------------------------
             return ("def landcover(x):\\n"+
                    "  membership = \"\"\\n"+
@@ -460,35 +447,22 @@ while zones:
                    "    membership += \"I\"\\n"+
                    "  if "+veg+":\\n"+
                    "    membership += \"V\"\\n"+
-                   "  if "+wat+":\\n"+
-                   "    membership += \"W\"\\n"+
                    "  return membership\\n"
                    )
         
         elif field == "S1":
             return("def landcover(a,b,c,d):\\n"+
                    "  membership = a+b+c+d\\n"+
-                   "  V,I,W = 0,0,0\\n"+
+                   "  V,I = 0,0\\n"+
                    "  for m in membership:\\n"+
                    "    if m == \"V\":\\n"+
                    "      V += 1\\n"+
                    "    if m == \"I\":\\n"+
-                   "      I += 1\\n"+
-                   "    if m == \"W\":\\n"+
-                   "      W += 1\\n"+                   
+                   "      I += 1\\n"+                  
                    "  if V > I:\\n"+
-                   "    if V > W:\\n"+
-                   "      return \"vegetation\"\\n"+
-                   "    elif V < W:\\n"+
-                   "      return \"water\"\\n"+
-                   "    else:\\n"+
-                   "      return \"confusion\"\\n"+
-                   "  elif I > W:\\n"+
-                   "    if I > V:\\n"+
-                   "      return \"impervious\"\\n"+
                    "    return \"vegetation\"\\n"+
-                   "  elif W > I:\\n"+
-                   "    return \"water\"\\n"+
+                   "  elif I > V:\\n"+
+                   "    return \"impervious\"\\n"+
                    "  else:\\n"+
                    "    return \"confusion\"\\n"
                    )
@@ -516,21 +490,21 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            gra = "<= 2"    #[0, 2]
-            shr = "<= 6"    #(2, 6]
+            gra = "x <= 2"    #[0, 2]
+            shr = "x <= 6"    #(2, 6]
             #tre = ""
             #-----------------------------------------------
             return("def landcover(x):\\n"+
-                   "  if x "+str(gra)+":\\n"+
+                   "  if "+gra+":\\n"+
                    "    return \"grass\"\\n"+
-                   "  elif x "+shr+":\\n"+
+                   "  elif "+shr+":\\n"+
                    "    return \"shrub\"\\n"+
                    "  else:\\n"+
                    "    return \"tree\""
                    )
         
           elif field == "S2":
-            return("def landcover(a):\\n"+
+            return("def landcover(a, b):\\n"+
                    "  if b != \"confusion\":\\n"+
                    "    return a "
                    )
@@ -541,11 +515,11 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            pat = "<= 2" #[0, 2]
+            pat = "x <= 2" #[0, 2]
             #bui = ""
             #-----------------------------------------------
             return("def landcover(x):\\n"+
-                   "  if x "+pat+":\\n"+
+                   "  if "+pat+":\\n"+
                    "    return \"path\"\\n"+
                    "  else:\\n"+
                    "    return \"building\""
@@ -555,78 +529,50 @@ while zones:
             #-----------------------------------------------
             #-----------------------------------------------
             # Thresholds
-            imp = "<= 0.4" #[0, 0.4]
+            imp = "0.1 <= x <= 0.91" #[0, 0.4]
             #-----------------------------------------------
             return ("def landcover(x):\\n"+
-                    "  if x "+imp+":\\n"+
+                    "  if "+imp+":\\n"+
                     "    return \"I\"\\n"+
                     "  return \"confusion\""
                     )
 
           elif field == "S2":
             return ("def landcover(a, b):\\n"+
-                    "  if a == \"path\" and b == \"I\":\\n"+
-                    "    return \"path\"\\n"+
-                    "  elif a == \"building\" and b == \"I\":\\n"+
-                    "    return \"building\"\\n"+
+                    "  if b == \"I\":\\n"+
+                    "    return a\\n"+
                     "  else:\\n"+
                     "    return \"confusion\""
                     )
 
-        elif landcover == "water":
-          if field == "S2_heig":
-            #-----------------------------------------------
-            #-----------------------------------------------
-            # Thresholds
-            wat = "<= 2" #[0, 2]
-            #-----------------------------------------------
-            return("def landcover(x):\\n"+
-                   "  if x "+wat+":\\n"+
-                   "    return \"water\"\\n"+
-                   "  else:\\n"+
-                   "    return\"confusion\""
-                   )
-        
-          elif field == "S2_ndwi":
-            #-----------------------------------------------
-            #-----------------------------------------------
-            # Thresholds
-            #-----------------------------------------------
-            return("def landcover(x):\\n"+
-                   "  return \"water\""
-                   )
-        
-          elif field == "S2":
-            return ("def landcover(a, b):\\n"+
-                    "  return a"
-                    )
-
     def createClassMembership(stage, landcover, field, field_lst, output):
         if field in stages:
+
             field_lst = field_lst[:-2]
-            fxn = "landcover("+field_lst[:-2]+")"
+            fxn = "landcover("+field_lst+")"
         else:
+
+            index = field
             field = stage+"_"+field[:4]
             field_lst += "!"+field+"!, "
-            fxn = "landcover(!"+field+"!)"
+            fxn = "landcover(!"+index+"!)"
+            
         label_class = classify(stage, landcover, field)
         arcpy.AddField_management(output, field, "TEXT")
         arcpy.CalculateField_management(output, field, fxn, "PYTHON_9.3", label_class)
-
+        return field_lst
     #-----------------------------------------------
     #-----------------------------------------------
     # Classifier methods
     #
 
-    stages = ["S1","S2"]
+    stages = ["S2"]
     class_structure = [
-                       ["vegetation",
-                            ["grass", "shrub", "tree"]],
                        ["impervious",
-                            ["building", "path"]],
-                       ["water",
-                            ["water"]]
-                       ]
+                            ["building", "path"]]]#,
+                       #["vegetation",
+                       #     ["grass", "shrub", "tree"]]
+                       #]
 
     s1_indices = ["ndvi", "ndwi", "gndvi", "osavi"]#, "gridcode"]
     s2_indices = ["height", "ndwi"]#, "gridcode"]
@@ -638,7 +584,7 @@ while zones:
         generateMessage(text)
         #-----------------------------------------------
         if stage == "S1":
-          s1_indices.append(stage)
+          s1_indices.extend([stage])
           field_lst = ""
           
           for field in s1_indices:
@@ -661,17 +607,17 @@ while zones:
                 text = "Classifying objects by "+field+"."
                 generateMessage(text)
                 #-----------------------------------------------
-                createClassMembership(stage, "", field, field_lst, sms_fc)
+                field_lst = createClassMembership(stage, "", field, field_lst, sms_fc)
 
         if stage == "S2":
-            s2_indices.append(stage)
+            s2_indices.extend([stage])
             merge_lst = []
-            for primitive in primitives:
+            for primitive in class_structure:
                 stage_output = os.path.join(scratchgdb, primitive[0])
-                landcover = primitive[1]
+                landcover = primitive[0]
                 field_lst = ""
-                for field in s2_indices:
 
+                for field in s2_indices:
                     if field == "S2":
                         #-----------------------------------------------
                         #-----------------------------------------------
@@ -680,18 +626,20 @@ while zones:
                         #-----------------------------------------------
                         createClassMembership(stage, landcover, field, field_lst, stage_output)
                 
-                        for i in range(len(landcover)):
-                            landcover_output = os.path.join(scratchgdb, landcover[i])
+                        for i in range(len(primitive[1])):
+                            landcover_output = os.path.join(scratchgdb, primitive[1][i])
+                            arcpy.AddMessage(primitive[1][i])
                             where_clause = "\"S2\" = '" + landcover[i] + "'"
                             arcpy.Select_analysis(stage_output, landcover_output, where_clause)
                             merge_lst.extend([landcover_output])
+                            
                     else:
                         #-----------------------------------------------
                         #-----------------------------------------------
-                        text = "Classifying "+primitive[0]+"objects by "+field+"."
+                        text = "Classifying "+primitive[0]+" objects by "+field+"."
                         generateMessage(text)
                         #-----------------------------------------------
-                        createClassMembership(stage, landcover, field, field_lst, stage_output)
+                        field_lst = createClassMembership(stage, landcover, field, field_lst, stage_output)
 
     #-----------------------------------------------
     #-----------------------------------------------
@@ -703,8 +651,12 @@ while zones:
     #-----------------------------------------------
     # Merging object layers
     #
+    #classified objects (training_samples)
+    classified_image = os.path.join(outputs, "classified_image_"+str(zone_num)+".shp")
+    arcpy.AddMessage(merge_lst)
     arcpy.Merge_management(merge_lst, classified_image)
-
+    zones = searchcursor.next()
+      
 
 #-----------------------------------------------
 #-----------------------------------------------
@@ -776,7 +728,7 @@ def gen_samples(classes):
       arcpy.AddMessage("Samples for " + label + " were limited to " + str(max_rows) + ".")
 
 training_merge = []
-for classes in stages:
+for classes in class_structure:
     gen_samples(classes)
 
 #-----------------------------------------------
