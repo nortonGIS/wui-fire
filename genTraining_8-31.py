@@ -42,7 +42,7 @@ inputs = os.path.join(toolpath, "Inputs")
 # Inputs
 #-----------------------------------------------
 
-Location_name = "Crockett_1"
+Location_name = "Crockett"
 
 # Set projection. OPTIONS = ["UTMZ10", "UTMZ11", "SPIII", "SPIV"]
 projection = "SPIII"
@@ -73,11 +73,7 @@ coarsening_size = "5"
 # Outputs
 #-----------------------------------------------
 
-#segmented naip
-naip_sms = os.path.join(scratchgdb, "naip_sms")
 
-#feature objects
-sms_fc = os.path.join(scratchgdb, "sms_fc")
 
 #-----------------------------------------------
 # Alert function
@@ -160,6 +156,11 @@ while zones:
     naip_zone_b4 = os.path.join(naip_zone, "Band_4")                         
     heights_zone = os.path.join(outputs, "height_zone_"+str(zone_num)+".tif")
 
+  #segmented naip
+    naip_sms = os.path.join(scratchgdb, "naip_sms_"+str(zone_num))
+
+    #feature objects
+    sms_fc = os.path.join(scratchgdb, "sms_fc_"+str(zone_num))
 
     #-----------------------------------------------
     text = "Extracting NAIP and heights by zone "+str(zone_num)+" boundary."
@@ -167,12 +168,12 @@ while zones:
     #-----------------------------------------------
     #-----------------------------------------------
     
-##    arcpy.Select_analysis(bnd_zones, bnd, where_clause)
-##                           
-##    this = ExtractByMask(naip, bnd)
-##    this.save(naip_zone)
-##    this = ExtractByMask(scaled_heights, bnd)
-##    this.save(heights_zone)
+    arcpy.Select_analysis(bnd_zones, bnd, where_clause)
+                           
+    this = ExtractByMask(naip, bnd)
+    this.save(naip_zone)
+    this = ExtractByMask(scaled_heights, bnd)
+    this.save(heights_zone)
 
     #-----------------------------------------------
     text = "Creating ground and non-ground surfaces."
@@ -198,29 +199,29 @@ while zones:
     min_cell_area = int(float(str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", "")))**2)+1
     where_clause = "Shape_Area > " + str(min_cell_area)
 
-##    #Create masks for ground and nonground features according to ground_ht_threshold
-##    ground_ht_threshold = 2 #ft
-##
-##    mask = SetNull(Int(heights_zone),Int(heights_zone),"VALUE > " + str(ground_ht_threshold))
-##    arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
-##    arcpy.Dissolve_management(ground_mask_raw, ground_dissolve_output)
-##
-##    #Find cell size of imagery
-##    cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
-##
-##    arcpy.Erase_analysis(bnd, ground_dissolve_output, nonground_mask_raw)
-##
-##    arcpy.PolygonToRaster_conversion(nonground_mask_raw, "OBJECTID", nonground_mask_raster, "CELL_CENTER", "", cell_size)
-##    arcpy.RasterToPolygon_conversion(nonground_mask_raster, nonground_mask_raw, "NO_SIMPLIFY", "VALUE")
-##    where_clause = "Shape_Area > " + str(min_cell_area)
-##    arcpy.Select_analysis(nonground_mask_raw, nonground_mask_poly, where_clause)
-##
-##    arcpy.Erase_analysis(bnd, nonground_mask_poly, ground_mask_poly)
-##    arcpy.PolygonToRaster_conversion(ground_mask_poly, "OBJECTID", ground_mask_raster, "CELL_CENTER", "", cell_size)
-##    arcpy.RasterToPolygon_conversion(ground_mask_raster, ground_mask_raw, "NO_SIMPLIFY", "VALUE")
-##    arcpy.Select_analysis(ground_mask_raw, ground_mask_poly, where_clause)
-##
-##    arcpy.Erase_analysis(bnd, ground_mask_poly, nonground_mask_poly)
+    #Create masks for ground and nonground features according to ground_ht_threshold
+    ground_ht_threshold = 2 #ft
+
+    mask = SetNull(Int(heights_zone),Int(heights_zone),"VALUE > " + str(ground_ht_threshold))
+    arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
+    arcpy.Dissolve_management(ground_mask_raw, ground_dissolve_output)
+
+    #Find cell size of imagery
+    cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
+
+    arcpy.Erase_analysis(bnd, ground_dissolve_output, nonground_mask_raw)
+
+    arcpy.PolygonToRaster_conversion(nonground_mask_raw, "OBJECTID", nonground_mask_raster, "CELL_CENTER", "", cell_size)
+    arcpy.RasterToPolygon_conversion(nonground_mask_raster, nonground_mask_raw, "NO_SIMPLIFY", "VALUE")
+    where_clause = "Shape_Area > " + str(min_cell_area)
+    arcpy.Select_analysis(nonground_mask_raw, nonground_mask_poly, where_clause)
+
+    arcpy.Erase_analysis(bnd, nonground_mask_poly, ground_mask_poly)
+    arcpy.PolygonToRaster_conversion(ground_mask_poly, "OBJECTID", ground_mask_raster, "CELL_CENTER", "", cell_size)
+    arcpy.RasterToPolygon_conversion(ground_mask_raster, ground_mask_raw, "NO_SIMPLIFY", "VALUE")
+    arcpy.Select_analysis(ground_mask_raw, ground_mask_poly, where_clause)
+
+    arcpy.Erase_analysis(bnd, ground_mask_poly, nonground_mask_poly)
 
     #-----------------------------------------------
     #-----------------------------------------------
@@ -247,33 +248,33 @@ while zones:
       mask_raw = os.path.join(scratchgdb, surface + "_mask_raw")
       dissolve_output = os.path.join(scratchgdb, surface + "_mask_dis")
 
-##      #-----------------------------------------------
-##      #-----------------------------------------------
-##      text = "Extracting NAIP imagery by "+ surface + " mask."
-##      generateMessage(text)
-##      #-----------------------------------------------
-##      this = ExtractByMask(naip_zone, mask)
-##      this.save(naip_mask)
-##      surface_raster_slide = Con(IsNull(Float(naip_mask)),-10000,Float(naip_mask))
-##
-##      #-----------------------------------------------
-##      #-----------------------------------------------
-##      text = "Segmenting NAIP imagery into "+ surface + " objects."
-##      generateMessage(text)
-##      #-----------------------------------------------
-##
-##      seg_naip = SegmentMeanShift(surface_raster_slide, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
-##      seg_naip.save(sms_raster)
-##      arcpy.RasterToPolygon_conversion(sms_raster, naip_fc, "NO_SIMPLIFY", "VALUE")
-##
-##      #-----------------------------------------------
-##      #-----------------------------------------------
-##      text = "Clipping "+ surface + " objects to mask."
-##      generateMessage(text)
-##      #-----------------------------------------------
-##      arcpy.Clip_analysis(naip_fc, mask_poly, sms)
-##
-##      naip_lst.extend([sms])
+      #-----------------------------------------------
+      #-----------------------------------------------
+      text = "Extracting NAIP imagery by "+ surface + " mask."
+      generateMessage(text)
+      #-----------------------------------------------
+      this = ExtractByMask(naip_zone, mask)
+      this.save(naip_mask)
+      surface_raster_slide = Con(IsNull(Float(naip_mask)),-10000,Float(naip_mask))
+
+      #-----------------------------------------------
+      #-----------------------------------------------
+      text = "Segmenting NAIP imagery into "+ surface + " objects."
+      generateMessage(text)
+      #-----------------------------------------------
+
+      seg_naip = SegmentMeanShift(surface_raster_slide, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
+      seg_naip.save(sms_raster)
+      arcpy.RasterToPolygon_conversion(sms_raster, naip_fc, "NO_SIMPLIFY", "VALUE")
+
+      #-----------------------------------------------
+      #-----------------------------------------------
+      text = "Clipping "+ surface + " objects to mask."
+      generateMessage(text)
+      #-----------------------------------------------
+      arcpy.Clip_analysis(naip_fc, mask_poly, sms)
+
+      naip_lst.extend([sms])
 
     #-----------------------------------------------
     #-----------------------------------------------
@@ -286,14 +287,14 @@ while zones:
     # Merge surface layers
     #
 
-##    arcpy.Merge_management(naip_lst, sms_fc)
-##    arcpy.AddField_management(sms_fc, "JOIN", "INTEGER")
-##    rows = arcpy.UpdateCursor(sms_fc)
-##    i = 1
-##    for row in rows:
-##      row.setValue("JOIN", i)
-##      rows.updateRow(row)
-##      i+= 1
+    arcpy.Merge_management(naip_lst, sms_fc)
+    arcpy.AddField_management(sms_fc, "JOIN", "INTEGER")
+    rows = arcpy.UpdateCursor(sms_fc)
+    i = 1
+    for row in rows:
+      row.setValue("JOIN", i)
+      rows.updateRow(row)
+      i+= 1
 
     #-----------------------------------------------
     #-----------------------------------------------
@@ -309,7 +310,7 @@ while zones:
     def createImageEnhancements(x, join, cell_size, created_enhancements):
 
         for field in image_enhancements:
-            enhancement_path = os.path.join(scratchgdb, field+"_raster"+"_"+cell_size+"m")
+            enhancement_path = os.path.join(scratchgdb, field)
             outTable = os.path.join(scratchgdb, "zonal_"+field)
 
             # -----------------------------------------------
@@ -354,8 +355,8 @@ while zones:
                 one_to_one_join(sms_fc, outTable, field, "FLOAT")
         return created_enhancements
 
-    #created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
-    #arcpy.DefineProjection_management(sms_fc, projection)
+    created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
+    arcpy.DefineProjection_management(sms_fc, projection)
 
     #-----------------------------------------------
     #-----------------------------------------------
@@ -566,13 +567,13 @@ while zones:
     # Classifier methods
     #
 
-    stages = ["S2"]
+    stages = ["S1","S2"]
     class_structure = [
                        ["impervious",
-                            ["building", "path"]]]#,
-                       #["vegetation",
-                       #     ["grass", "shrub", "tree"]]
-                       #]
+                            ["building", "path"]],
+                       ["vegetation",
+                            ["grass", "shrub", "tree"]]
+                      ]
 
     s1_indices = ["ndvi", "ndwi", "gndvi", "osavi"]#, "gridcode"]
     s2_indices = ["height", "ndwi"]#, "gridcode"]
@@ -598,7 +599,7 @@ while zones:
                 createClassMembership(stage, "", field, field_lst, sms_fc)
 
                 for primitive in class_structure:
-                    output = os.path.join(scratchgdb, primitive[0])
+                    output = os.path.join(outputs, primitive[0]+"_"+str(zone_num)+".shp")
                     where_clause = "\"S1\" = '" + primitive[0] + "'"
                     arcpy.Select_analysis(sms_fc, output, where_clause)
             else:
@@ -613,7 +614,7 @@ while zones:
             s2_indices.extend([stage])
             merge_lst = []
             for primitive in class_structure:
-                stage_output = os.path.join(scratchgdb, primitive[0])
+                stage_output = os.path.join(outputs, primitive[0]+"_"+str(zone_num)+".shp")
                 landcover = primitive[0]
                 field_lst = ""
 
@@ -625,13 +626,6 @@ while zones:
                         generateMessage(text)
                         #-----------------------------------------------
                         createClassMembership(stage, landcover, field, field_lst, stage_output)
-                
-                        for i in range(len(primitive[1])):
-                            landcover_output = os.path.join(scratchgdb, primitive[1][i])
-                            arcpy.AddMessage(primitive[1][i])
-                            where_clause = "\"S2\" = '" + landcover[i] + "'"
-                            arcpy.Select_analysis(stage_output, landcover_output, where_clause)
-                            merge_lst.extend([landcover_output])
                             
                     else:
                         #-----------------------------------------------
@@ -639,22 +633,10 @@ while zones:
                         text = "Classifying "+primitive[0]+" objects by "+field+"."
                         generateMessage(text)
                         #-----------------------------------------------
+                        
                         field_lst = createClassMembership(stage, landcover, field, field_lst, stage_output)
 
-    #-----------------------------------------------
-    #-----------------------------------------------
-    text = "Merging all classified layers into one polygon."
-    generateMessage(text)
-    #-----------------------------------------------
 
-    #-----------------------------------------------
-    #-----------------------------------------------
-    # Merging object layers
-    #
-    #classified objects (training_samples)
-    classified_image = os.path.join(outputs, "classified_image_"+str(zone_num)+".shp")
-    arcpy.AddMessage(merge_lst)
-    arcpy.Merge_management(merge_lst, classified_image)
     zones = searchcursor.next()
       
 
