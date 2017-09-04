@@ -21,7 +21,6 @@ import sys
 from arcpy import env
 from arcpy.sa import *
 arcpy.env.overwriteOutput = True
-from tableJoin import one_to_one_join
 
 #-----------------------------------------------
 # Set scratch workspace and environment settings
@@ -43,58 +42,78 @@ heights = os.path.join(inputs, "heights.tif")
 trees = os.path.join(inputs, "trees.shp")
 naip = os.path.join(inputs, "naip.tif")
 
+tree_heights = os.path.join(outputs, "tree_hts.tif")
 existing_canopy_centroids = os.path.join(outputs, "canopy_cntrs.shp")
 tree_thiessen = os.path.join(outputs, "treeThiessen.shp")
 thiessen = os.path.join(scratchgdb, "thiessen")
+temp = os.path.join(scratchgdb, "temp")
 
 all_heights = Con(IsNull(Float(heights)),0,Float(heights))
 all_heights.save(tree_heights)
 
-height_range = []
-for range in height_ranges:
-    lower = slice[0]
-    upper = slice[1]
+count = 0
+max_height = 50
+incr = -5
+while max_height > 6:
+    upper = max_height
+    max_height += incr
+    lower = max_height
     
-    height_range = str(lower)+"_"+str(upper))
-    slice = os.path.join(outputs, "slice_"+height_range)
+    height_range = str(lower)+"_"+str(upper)
+    ht_slice = os.path.join(scratchgdb, "slice_"+height_range)
+    slice_dissolve = os.path.join(scratchgdb, "slice_dis_"+height_range)
+    slice_sms = os.path.join(outputs, "slice_sms"+height_range+".tif")
     slice_poly = os.path.join(scratchgdb, "slice_poly_"+height_range)
-    outTable = os.path.join(outputs, "zonal_"+height_range)
-    canopies = os.path.join(outputs, "canopies_"+height_range)
-    new_canopy_centroids = os.path.join(outputs, "new_canopy_cntr_"+height_range)
+    outTable = os.path.join(scratchgdb, "zonal_"+height_range)
+    canopies = os.path.join(scratchgdb, "canopies_"+height_range)
+    new_canopies = os.path.join(scratchgdb, "new_canopies_"+height_range)
+    new_canopy_centroids = os.path.join(scratchgdb, "new_canopy_cntr_"+height_range)
+    existing_canopies = os.path.join(scratchgdb, "existing_canopies")
+    temp = os.path.join(scratchgdb, "temp_"+str(count))
     
     #create slice
-    vert_max = Con(Float(tree_heights) > upper, upper, Float(tree_heights))
-    vert_min = Con(Float(vert_max) < lower, 0, Float(vert_max))
-    vert_min.save(slice)
+    arcpy.AddMessage("Making vertical slices between "+str(upper)+" and "+str(lower)+" feet.")                  
+
+    vert_max = Con(Float(tree_heights)>= upper, upper, Float(tree_heights))
+    vert_min = Con(Float(vert_max) <= lower, 0, Float(vert_max))
+    vert_min.save(ht_slice)
     
     #convert slice to polygons and extract canopies
-    spectral_detail = 20
-    spatial_detail = 20
-    min_seg_size = 2
-    
-    seg_naip = SegmentMeanShift(slice, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
-    seg_naip.save(slice_poly)
-    arcpy.RasterToPolygon_conversion(slice, slice_poly, "NO_SIMPLIFY", "VALUE")
-    where_clause = "Value > 0"
-    arcpy.Select_analysis(slice_poly, canopies, where_clause)
+    this = Con(Float(ht_slice), Int(ht_slice))
+    this.save(slice_sms)
+    arcpy.RasterToPolygon_conversion(slice_sms, slice_poly, "NO_SIMPLIFY", "VALUE")
+    arcpy.Dissolve_management(slice_poly, canopies,"", "", 
+                          "SINGLE_PART")
 
     #join previous centroids to canopy polygons
-    arcpy.SpatialJoin_analysis(canopies, existing_canopy_centroids, existing_canopies,  "JOIN_ONE_TO_MANY")
+    if count > 0:
+        arcpy.SpatialJoin_analysis(canopies, existing_canopy_centroids, existing_canopies,  "JOIN_ONE_TO_ONE")
+        where_clause = "Exist IS NULL"
+        arcpy.Select_analysis(existing_canopies, new_canopies, where_clause)
 
-    #create new canopy centroids
-    where_clause = "JOIN = NULL"
-    arcpy.Select_analysis(existing_canopies, new_canopies, where_clause)
-    arcpy.FeatureToPoint_management(new_canopies, new_canopy_centroids, "INSIDE")
+        #create new canopy centroids
+        arcpy.FeatureToPoint_management(new_canopies, new_canopy_centroids, "INSIDE")
+        arcpy.AddField_management(new_canopy_centroids, "Exist", "INTEGER")
+        arcpy.CalculateField_management(new_canopy_centroids, "Exist", 1)
+        arcpy.DeleteField_management (new_canopy_centroids, ["Join_Count", "TARGET_FID","Shape_Area_1", "Shape_Leng", "ORIG_FID"]) 
 
-    arcpy.Merge_management(existing_canopy_centroids, new_canopy_centroids)
+        arcpy.DeleteField_management (existing_canopy_centroids, ["Shape_Area", "Shape_Leng", "ORIG_FID"]) 
+ 
+        
+        arcpy.Append_management(new_canopy_centroids, existing_canopy_centroids, "TEST")
+        
+    else:
+        new_canopies = canopies
     
+        #create new canopy centroids
+        arcpy.FeatureToPoint_management(new_canopies, existing_canopy_centroids, "INSIDE")
+        arcpy.AddField_management(existing_canopy_centroids, "Exist", "INTEGER")
+        arcpy.CalculateField_management(existing_canopy_centroids, "Exist", 1)
 
+    count += 1
+    
+arcpy.AddMessage("Creating Thiessen polygons of canopy centroids.")
 arcpy.CreateThiessenPolygons_analysis(existing_canopy_centroids, thiessen)
-this = ExtractByMask(thiessen, trees)
-this.save(tree_thiessen)
+arcpy.AddMessage("Clipping thiessen by tree boundary.")
+arcpy.Clip_analysis (thiessen, trees, tree_thiessen)
 
-#-----------------------------------------------
-#-----------------------------------------------
-text = "All processes are complete."
-generateMessage(text)
-#-----------------------------------------------
