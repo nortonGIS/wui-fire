@@ -38,8 +38,8 @@ inputs = os.path.join(toolpath, "Inputs")
 # Inputs
 #-----------------------------------------------
 
-heights = os.path.join(inputs, "heights.tif")
-trees = os.path.join(inputs, "trees.shp")
+heights = os.path.join(inputs, "heights_1.tif")
+trees = os.path.join(inputs, "trees_1.shp")
 naip = os.path.join(inputs, "naip.tif")
 
 tree_heights = os.path.join(outputs, "tree_hts.tif")
@@ -53,21 +53,30 @@ all_heights.save(tree_heights)
 
 count = 0
 max_height = 50
-incr = -5
+incr = -1
 while max_height > 6:
     upper = max_height
     max_height += incr
     lower = max_height
     
-    height_range = str(lower)+"_"+str(upper)
-    ht_slice = os.path.join(scratchgdb, "slice_"+height_range)
-    slice_dissolve = os.path.join(scratchgdb, "slice_dis_"+height_range)
-    slice_sms = os.path.join(outputs, "slice_sms"+height_range+".tif")
-    slice_poly = os.path.join(scratchgdb, "slice_poly_"+height_range)
-    outTable = os.path.join(scratchgdb, "zonal_"+height_range)
-    canopies = os.path.join(scratchgdb, "canopies_"+height_range)
-    new_canopies = os.path.join(scratchgdb, "new_canopies_"+height_range)
-    new_canopy_centroids = os.path.join(scratchgdb, "new_canopy_cntr_"+height_range)
+##    height_range = str(lower)+"_"+str(upper)
+##    ht_slice = os.path.join(scratchgdb, "slice_"+height_range)
+##    slice_dissolve = os.path.join(scratchgdb, "slice_dis_"+height_range)
+##    slice_sms = os.path.join(outputs, "slice_sms"+height_range+".tif")
+##    slice_poly = os.path.join(scratchgdb, "slice_poly_"+height_range)
+##    outTable = os.path.join(scratchgdb, "zonal_"+height_range)
+##    canopies = os.path.join(scratchgdb, "canopies_"+height_range)
+##    new_canopies = os.path.join(scratchgdb, "new_canopies_"+height_range)
+##    new_canopy_centroids = os.path.join(scratchgdb, "new_canopy_cntr_"+height_range)
+
+    ht_slice = os.path.join(scratchgdb, "slice")
+    slice_dissolve = os.path.join(scratchgdb, "slice_dis")
+    slice_sms = os.path.join(outputs, "slice_sms.tif")
+    slice_poly = os.path.join(scratchgdb, "slice_poly")
+    canopies = os.path.join(scratchgdb, "canopies")
+    new_canopies = os.path.join(scratchgdb, "new_canopies")
+    new_canopy_centroids = os.path.join(scratchgdb, "new_canopy_cntr")
+    
     existing_canopies = os.path.join(scratchgdb, "existing_canopies")
     temp = os.path.join(scratchgdb, "temp_"+str(count))
     
@@ -88,7 +97,7 @@ while max_height > 6:
     #join previous centroids to canopy polygons
     if count > 0:
         arcpy.SpatialJoin_analysis(canopies, existing_canopy_centroids, existing_canopies,  "JOIN_ONE_TO_ONE")
-        where_clause = "Exist IS NULL"
+        where_clause = "Exist IS NULL AND Shape_Length > 14"
         arcpy.Select_analysis(existing_canopies, new_canopies, where_clause)
 
         #create new canopy centroids
