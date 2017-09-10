@@ -42,7 +42,7 @@ inputs = os.path.join(toolpath, "Inputs")
 # Inputs
 #-----------------------------------------------
 
-Location_name = "Glen Frazer - Kinder Morgan Pipepline"
+Location_name = "Glen Frazer - Kinder Morgan Pipeline"
 
 # Set projection. OPTIONS = ["UTMZ10", "UTMZ11", "SPIII", "SPIV"]
 projection = "SPIII"
@@ -107,10 +107,12 @@ elif projection == "UTMZ11":
   projection = "PROJCS['NAD_1983_UTM_Zone_11N',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Transverse_Mercator'],PARAMETER['False_Easting',500000.0],PARAMETER['False_Northing',0.0],PARAMETER['Central_Meridian',-117.0],PARAMETER['Scale_Factor',0.9996],PARAMETER['Latitude_Of_Origin',0.0],UNIT['Meter',1.0]]"
 elif projection == "SPIII":
   scale_height = 1
+  scale_naip = 3.28084
   unit = "Feet"
   projection = "PROJCS['NAD_1983_StatePlane_California_III_FIPS_0403_Feet',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Lambert_Conformal_Conic'],PARAMETER['False_Easting',6561666.666666666],PARAMETER['False_Northing',1640416.666666667],PARAMETER['Central_Meridian',-120.5],PARAMETER['Standard_Parallel_1',37.06666666666667],PARAMETER['Standard_Parallel_2',38.43333333333333],PARAMETER['Latitude_Of_Origin',36.5],UNIT['Foot_US',0.3048006096012192]]"
 elif projection == "SPIV":
   scale_height = 1
+  scale_naip = 3.28084
   unit = "Feet"
   projection = "PROJCS['NAD_1983_StatePlane_California_VI_FIPS_0406_Feet',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Lambert_Conformal_Conic'],PARAMETER['False_Easting',6561666.666666666],PARAMETER['False_Northing',1640416.666666667],PARAMETER['Central_Meridian',-116.25],PARAMETER['Standard_Parallel_1',32.78333333333333],PARAMETER['Standard_Parallel_2',33.88333333333333],PARAMETER['Latitude_Of_Origin',32.16666666666666],UNIT['Foot_US',0.3048006096012192]]"
 
@@ -131,16 +133,21 @@ generateMessage(text)
 # Coarsen NAIP Pixel size
 #
 
-coarsen_naip = os.path.join(outputs,"naip_"+coarsening_size+"m.tif")
-naip__cell_size = coarsening_size+" "+coarsening_size
+naip = os.path.join(outputs,"naip_"+coarsening_size+"m.tif")
+cell_size = int(coarsening_size)*scale_naip
+naip_cell_size = str(cell_size) +" "+str(cell_size)
 arcpy.Resample_management(raw_naip, naip, naip_cell_size, "BILINEAR")    
 arcpy.DefineProjection_management(naip, projection)
 
 scaled_heights = os.path.join(outputs, "scaled_heights.tif")
+resample_heights = os.path.join(outputs, "heights_1m.tif")
 arcpy.env.snapRaster = naip
-this = Aggregate(raw_heights, naip_cell_size, "MAXIMUM")
+factor = float(cell_size)/float(3.28084)
+arcpy.Resample_management(raw_heights, resample_heights, "3.28084 3.28084", "BILINEAR")
+
+this = Aggregate(resample_heights, factor, "MAXIMUM")
 this.save(heights)
-#arcpy.Resample_management(raw_heights, heights, naip_cell_size, "")
+
 this = Float(heights) * scale_height
 this.save(scaled_heights)
 arcpy.DefineProjection_management(scaled_heights, projection)
@@ -324,7 +331,7 @@ while zones:
       # -----------------------------------------------
 
       if field == "ndvi":
-        inValueRaster = ((Float(naip_b4))-(Float(naip_zone_b1))) / ((Float(naip_zone_b4))+(Float(naip_zone_b1)))
+        inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b1))) / ((Float(naip_zone_b4))+(Float(naip_zone_b1)))
         inValueRaster.save(enhancement_path)
         ie = enhancement_path
       elif field == "ndwi":
@@ -332,7 +339,7 @@ while zones:
         inValueRaster.save(enhancement_path)
         ie = enhancement_path
       elif field == "gndvi":
-        inValueRaster = ((Float(naip_zone_b4))-(Float(naip_b2))) / ((Float(naip_zone_b4))+(Float(naip_zone_b2)))
+        inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b2))) / ((Float(naip_zone_b4))+(Float(naip_zone_b2)))
         inValueRaster.save(enhancement_path)
         ie = enhancement_path
       elif field == "osavi":
@@ -394,7 +401,7 @@ while zones:
           #-----------------------------------------------
           #-----------------------------------------------
           # Thresholds
-          imp = "-0.88 <= x <= -0.06" #[-1, -0.05]
+          imp = "-0.88 <= x <= -0.2" #[-1, -0.05]
           veg = "-0.18 <= x <= 0.5"  #[0.02, 1]
           #-----------------------------------------------
           return ("def landcover(x):\\n"+
@@ -410,7 +417,7 @@ while zones:
           #-----------------------------------------------
           #-----------------------------------------------
           # Thresholds
-          imp = "0.1 <= x <= 0.91"  #[0.085, 0.66]
+          imp = "0.24 <= x <= 0.91"  #[0.085, 0.66]
           veg = "-0.41 <= x <= 0.18" #[-1, 0.085]
           #-----------------------------------------------
           return ("def landcover(x):\\n"+
@@ -426,7 +433,7 @@ while zones:
           #-----------------------------------------------
           #-----------------------------------------------
           # Thresholds
-          imp = "-0.694<= x <= -0.17"  #[0.085, 0.66]
+          imp = "-0.94<= x <= -0.17"  #[0.085, 0.66]
           veg = "-0.3 <= x <= 0.38" #[-1, 0.085]
           #-----------------------------------------------
           return ("def landcover(x):\\n"+
@@ -442,7 +449,7 @@ while zones:
           #-----------------------------------------------
           #-----------------------------------------------
           # Thresholds
-          imp = "-0.94 <= x <= 0.02"  #[0.085, 0.66]
+          imp = "-0.94 <= x <= -0.25"  #[0.085, 0.66]
           veg = "-0.15 <= x <= 0.76" #[-1, 0.085]
           #-----------------------------------------------
           return ("def landcover(x):\\n"+
@@ -606,6 +613,7 @@ while zones:
                   where_clause = "\"S1\" = '" + primitive[0] + "'"
                   arcpy.Select_analysis(sms_fc, output, where_clause)
                   lst_merge.append(output)
+                  
           else:
               #-----------------------------------------------
               #-----------------------------------------------
@@ -659,7 +667,7 @@ def createLayerComposite(bands):
   bands_5m = createImageEnhancements(bands, "no", "5", [])
   arcpy.CompositeBands_management(bands_5m, composite)
   arcpy.DefineProjection_management(composite, projection)
-createLayer(band_lst)
+createLayerComposite(band_lst)
 
 
 ###-----------------------------------------------
