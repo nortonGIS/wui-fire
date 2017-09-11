@@ -651,7 +651,7 @@ while zones:
   #                     field_lst = createClassMembership(stage, landcover, field, field_lst, stage_output)
 
 
-  # zones = searchcursor.next()
+  zones = searchcursor.next()
 
 confused = os.path.join(outputs, "confused.shp")
 veg_join = os.path.join(scratchgdb, "veg_join")
@@ -675,12 +675,12 @@ arcpy.Erase_analysis (sms_fc, veg_join, confused)
 
 band_lst = ["ndvi", "ndwi", "height"]
 
-def createLayerComposite(bands):   
-  composite = os.path.join(outputs, "composite.tif")
+composite = os.path.join(outputs, "composite.tif")
+#def createLayerComposite(bands):
   # bands_5m = createImageEnhancements(bands, "no", "5", [])
   # arcpy.CompositeBands_management(bands_5m, composite)
   # arcpy.DefineProjection_management(composite, projection)
-createLayerComposite(band_lst)
+#createLayerComposite(band_lst)
 
 
 #-----------------------------------------------
@@ -700,28 +700,44 @@ for field in training_fields:
   field_type = field[1]
   arcpy.AddField_management(svm_training, field_name, field_type)
 
-zonal_training = os.path.join(scratchgdb, "zonal_train")
-arcpy.ZonalStatisticsAsTable(svm_training, "FID", composite, zonal_training, "NODATA", "COUNT")
-one_to_one_join(svm_training, zonal_training, "FID", "LONG")
+arcpy.AddField_management(svm_training, "JOIN", "INTEGER")
+arcpy.CalculateField_management(svm_training, "JOIN", "[OBJECTID]")
 
-searchcursor = arcpy.SearchCursor(svm_training)
-searchTrainingCount = arcpy.SearchCursor
-row = searchcursor.next()
-while row:
-  for field in training_fields:
-    field_name = field[0]
-    row.setValue("Classname", row.getValue("S2"))
-    row.setValue("Classvalue", row.getValue("FID") + 1)
-    row.setValue("RED", 1)
-    row.setValue("GREEN", 1)
-    row.setValue("BLUE", 1)
-    row.setValue("Count", row.getValue("COUNT"))
-  row = searchcursor.next()
+zonal_training = os.path.join(scratchgdb, "zonal_train")
+
+z_stat = ZonalStatisticsAsTable(svm_training, "JOIN", composite, zonal_training, "NODATA", "ALL")
+one_to_one_join(svm_training, zonal_training, "JOIN", "INTEGER")
+
+arcpy.CalculateField_management(svm_training, "Classname", "[S2]")
+arcpy.CalculateField_management(svm_training, "Classvalue", "[JOIN]")
+arcpy.CalculateField_management(svm_training, "RED", 1)
+arcpy.CalculateField_management(svm_training, "GREEN", 1)
+arcpy.CalculateField_management(svm_training, "BLUE", 1)
+arcpy.CalculateField_management(svm_training, "Count", "[COUNT]")
+
+                                
+
+##searchcursor = arcpy.SearchCursor(svm_training)
+##searchTrainingCount = arcpy.SearchCursor
+##row = searchcursor.next()
+##while row:
+##  for field in training_fields:
+##    field_name = field[0]
+##    row.setValue("Classname", row.getValue("S2"))
+##    row.setValue("Classvalue", row.getValue("JOIN"))
+##    row.setValue("RED", 1)
+##    row.setValue("GREEN", 1)
+##    row.setValue("BLUE", 1)
+##    row.setValue("Count", row.getValue("COUNT"))
+##  row = searchcursor.next()
 
 fields = arcpy.ListFields(svm_training)
+delete_fields = []
 for field in fields:
   if field not in ["FID", "Shape", "Classname", "Classvalue", "RED", "GREEN", "BLUE", "Count"]:
-    arcpy.DeleteField_management (svm_training, field)
+    delete_fields.append(field)
+    arcpy.AddMessage(field)
+arcpy.DeleteField_management(svm_training, delete_fields)
 
 
 out_definition = os.path.join(outputs, "svm_classifier.ecd")
