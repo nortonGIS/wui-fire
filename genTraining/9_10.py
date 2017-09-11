@@ -173,494 +173,502 @@ while zones:
   #feature objects
   sms_fc = os.path.join(scratchgdb, "sms_fc_"+str(zone_num))
   lst_merge = []
-  #-----------------------------------------------
-  text = "Extracting NAIP and heights by zone "+str(zone_num)+" boundary."
-  generateMessage(text)
-  #-----------------------------------------------
-  #-----------------------------------------------
+  # #-----------------------------------------------
+  # text = "Extracting NAIP and heights by zone "+str(zone_num)+" boundary."
+  # generateMessage(text)
+  # #-----------------------------------------------
+  # #-----------------------------------------------
   
-  arcpy.Select_analysis(bnd_zones, bnd, where_clause)
+  # arcpy.Select_analysis(bnd_zones, bnd, where_clause)
                          
-  this = ExtractByMask(naip, bnd)
-  this.save(naip_zone)
-  this = ExtractByMask(scaled_heights, bnd)
-  this.save(heights_zone)
+  # this = ExtractByMask(naip, bnd)
+  # this.save(naip_zone)
+  # this = ExtractByMask(scaled_heights, bnd)
+  # this.save(heights_zone)
 
-  #-----------------------------------------------
-  text = "Creating ground and non-ground surfaces."
-  generateMessage(text)
-  #-----------------------------------------------
-  #-----------------------------------------------
-
-
-  #Variables
-  ground_mask_poly = os.path.join(scratchgdb, "ground_mask_poly")
-  nonground_mask_poly = os.path.join(scratchgdb, "nonground_mask_poly")
-  ground_mask_raw = os.path.join(scratchgdb, "ground_mask_raw")
-  nonground_mask_raw = os.path.join(scratchgdb, "nonground_mask_raw")
-  ground_dissolve_output = os.path.join(scratchgdb, "ground_mask_dis")
-  nonground_dissolve_output = os.path.join(scratchgdb, "nonground_mask_dis")
-  ground_mask_raster = os.path.join(scratchgdb, "ground_mask_raster")
-  nonground_mask_raster = os.path.join(scratchgdb, "nonground_mask_raster")
-  nonground_mask_resample = os.path.join(scratchgdb, "nonground_mask_resample")
-  ground_mask_resample = os.path.join(scratchgdb, "ground_mask_resample")
+  # #-----------------------------------------------
+  # text = "Creating ground and non-ground surfaces."
+  # generateMessage(text)
+  # #-----------------------------------------------
+  # #-----------------------------------------------
 
 
-  #Find minimum cell area
-  min_cell_area = int(float(str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", "")))**2)+1
-  where_clause = "Shape_Area > " + str(min_cell_area)
-
-  #Create masks for ground and nonground features according to ground_ht_threshold
-  ground_ht_threshold = 2 #ft
-
-  mask = SetNull(Int(heights_zone),Int(heights_zone),"VALUE > " + str(ground_ht_threshold))
-  arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
-  arcpy.Dissolve_management(ground_mask_raw, ground_dissolve_output)
-
-  #Find cell size of imagery
-  cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
-
-  arcpy.Erase_analysis(bnd, ground_dissolve_output, nonground_mask_raw)
-
-  arcpy.PolygonToRaster_conversion(nonground_mask_raw, "OBJECTID", nonground_mask_raster, "CELL_CENTER", "", cell_size)
-  arcpy.RasterToPolygon_conversion(nonground_mask_raster, nonground_mask_raw, "NO_SIMPLIFY", "VALUE")
-  where_clause = "Shape_Area > " + str(min_cell_area)
-  arcpy.Select_analysis(nonground_mask_raw, nonground_mask_poly, where_clause)
-
-  arcpy.Erase_analysis(bnd, nonground_mask_poly, ground_mask_poly)
-  arcpy.PolygonToRaster_conversion(ground_mask_poly, "OBJECTID", ground_mask_raster, "CELL_CENTER", "", cell_size)
-  arcpy.RasterToPolygon_conversion(ground_mask_raster, ground_mask_raw, "NO_SIMPLIFY", "VALUE")
-  arcpy.Select_analysis(ground_mask_raw, ground_mask_poly, where_clause)
-
-  arcpy.Erase_analysis(bnd, ground_mask_poly, nonground_mask_poly)
-
-  #-----------------------------------------------
-  #-----------------------------------------------
-  #Segment each surface separately using SMS
-  #
-
-  spectral_detail = 20
-  spatial_detail = 20
-  min_seg_size = 1
-
-  surfaces = ["ground", "nonground"]
-  naip_lst = []
-  ground_mask_poly = []
-
-  for surface in surfaces:
-
-  # Try running SMS on each surface
-    sms_raster = os.path.join(scratchgdb, surface+"_sms_raster")
-    naip_fc =  os.path.join(scratchgdb, surface + "_naip_fc")
-    mask_poly = os.path.join(scratchgdb, surface+ "_mask_poly")
-    mask = mask_poly
-    sms = os.path.join(scratchgdb, surface+"_sms")
-    naip_mask = os.path.join(scratchgdb,surface + "_naip")
-    mask_raw = os.path.join(scratchgdb, surface + "_mask_raw")
-    dissolve_output = os.path.join(scratchgdb, surface + "_mask_dis")
-
-    #-----------------------------------------------
-    #-----------------------------------------------
-    text = "Extracting NAIP imagery by "+ surface + " mask."
-    generateMessage(text)
-    #-----------------------------------------------
-    this = ExtractByMask(naip_zone, mask)
-    this.save(naip_mask)
-    surface_raster_slide = Con(IsNull(Float(naip_mask)),-10000,Float(naip_mask))
-
-    #-----------------------------------------------
-    #-----------------------------------------------
-    text = "Segmenting NAIP imagery into "+ surface + " objects."
-    generateMessage(text)
-    #-----------------------------------------------
-
-    seg_naip = SegmentMeanShift(surface_raster_slide, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
-    seg_naip.save(sms_raster)
-    arcpy.RasterToPolygon_conversion(sms_raster, naip_fc, "NO_SIMPLIFY", "VALUE")
-
-    #-----------------------------------------------
-    #-----------------------------------------------
-    text = "Clipping "+ surface + " objects to mask."
-    generateMessage(text)
-    #-----------------------------------------------
-    arcpy.Clip_analysis(naip_fc, mask_poly, sms)
-
-    naip_lst.extend([sms])
-
-  #-----------------------------------------------
-  #-----------------------------------------------
-  text = "Merging ground and nonground objects."
-  generateMessage(text)
-  #-----------------------------------------------
-
-  #-----------------------------------------------
-  #-----------------------------------------------
-  # Merge surface layers
-  #
-
-  arcpy.Merge_management(naip_lst, sms_fc)
-  arcpy.AddField_management(sms_fc, "JOIN", "INTEGER")
-  rows = arcpy.UpdateCursor(sms_fc)
-  i = 1
-  for row in rows:
-    row.setValue("JOIN", i)
-    rows.updateRow(row)
-    i+= 1
-
-  #-----------------------------------------------
-  #-----------------------------------------------
-  # Create Image Enhancements and join to objects
-  #
-
-  image_enhancements = ["ndvi", "ndwi", "gndvi", "osavi", "height"]
+  # #Variables
+  # ground_mask_poly = os.path.join(scratchgdb, "ground_mask_poly")
+  # nonground_mask_poly = os.path.join(scratchgdb, "nonground_mask_poly")
+  # ground_mask_raw = os.path.join(scratchgdb, "ground_mask_raw")
+  # nonground_mask_raw = os.path.join(scratchgdb, "nonground_mask_raw")
+  # ground_dissolve_output = os.path.join(scratchgdb, "ground_mask_dis")
+  # nonground_dissolve_output = os.path.join(scratchgdb, "nonground_mask_dis")
+  # ground_mask_raster = os.path.join(scratchgdb, "ground_mask_raster")
+  # nonground_mask_raster = os.path.join(scratchgdb, "nonground_mask_raster")
+  # nonground_mask_resample = os.path.join(scratchgdb, "nonground_mask_resample")
+  # ground_mask_resample = os.path.join(scratchgdb, "ground_mask_resample")
 
 
-  def normalize(index):
-      return (2 * (Float(index) - Float(index.minimum)) / (Float(index.maximum) - Float(index.minimum))) - 1
+  # #Find minimum cell area
+  # min_cell_area = int(float(str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", "")))**2)+1
+  # where_clause = "Shape_Area > " + str(min_cell_area)
 
-  def createImageEnhancements(x, join, cell_size, created_enhancements):
+  # #Create masks for ground and nonground features according to ground_ht_threshold
+  # ground_ht_threshold = 2 #ft
 
-    for field in image_enhancements:
-      enhancement_path = os.path.join(scratchgdb, field+"_"+str(zone_num))
-      outTable = os.path.join(scratchgdb, "zonal_"+field)
+  # mask = SetNull(Int(heights_zone),Int(heights_zone),"VALUE > " + str(ground_ht_threshold))
+  # arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
+  # arcpy.Dissolve_management(ground_mask_raw, ground_dissolve_output)
 
-      # -----------------------------------------------
-      # -----------------------------------------------
-      text = "Computing " + field + " at "+cell_size+"m."
-      generateMessage(text)
-      # -----------------------------------------------
+  # #Find cell size of imagery
+  # cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
 
-      if field == "ndvi":
-        inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b1))) / ((Float(naip_zone_b4))+(Float(naip_zone_b1)))
-        inValueRaster.save(enhancement_path)
-        ie = enhancement_path
-      elif field == "ndwi":
-        inValueRaster = ((Float(naip_zone_b2))-(Float(naip_zone_b4))) / ((Float(naip_zone_b2))+(Float(naip_zone_b4)))
-        inValueRaster.save(enhancement_path)
-        ie = enhancement_path
-      elif field == "gndvi":
-        inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b2))) / ((Float(naip_zone_b4))+(Float(naip_zone_b2)))
-        inValueRaster.save(enhancement_path)
-        ie = enhancement_path
-      elif field == "osavi":
-        inValueRaster = normalize((1.5 * (Float(naip_zone_b4) - Float(naip_zone_b1))) / ((Float(naip_zone_b4)) + (Float(naip_zone_b1)) + 0.16))
-        inValueRaster.save(enhancement_path)
-        ie = enhancement_path
-      elif field == "height":
-        enhancement_path = heights_zone
+  # arcpy.Erase_analysis(bnd, ground_dissolve_output, nonground_mask_raw)
 
-      created_enhancements.append(enhancement_path)
-      if join == "yes":
+  # arcpy.PolygonToRaster_conversion(nonground_mask_raw, "OBJECTID", nonground_mask_raster, "CELL_CENTER", "", cell_size)
+  # arcpy.RasterToPolygon_conversion(nonground_mask_raster, nonground_mask_raw, "NO_SIMPLIFY", "VALUE")
+  # where_clause = "Shape_Area > " + str(min_cell_area)
+  # arcpy.Select_analysis(nonground_mask_raw, nonground_mask_poly, where_clause)
 
-        # -----------------------------------------------
-        # -----------------------------------------------
-        text = "Joining mean " + field + " to each object."
-        generateMessage(text)
-        # -----------------------------------------------
+  # arcpy.Erase_analysis(bnd, nonground_mask_poly, ground_mask_poly)
+  # arcpy.PolygonToRaster_conversion(ground_mask_poly, "OBJECTID", ground_mask_raster, "CELL_CENTER", "", cell_size)
+  # arcpy.RasterToPolygon_conversion(ground_mask_raster, ground_mask_raw, "NO_SIMPLIFY", "VALUE")
+  # arcpy.Select_analysis(ground_mask_raw, ground_mask_poly, where_clause)
 
-        z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", enhancement_path, outTable, "NODATA", "MEAN")
+  # arcpy.Erase_analysis(bnd, ground_mask_poly, nonground_mask_poly)
 
-        arcpy.AddField_management(outTable, field, "FLOAT")
-        arcpy.CalculateField_management(outTable, field, "[MEAN]")
-        one_to_one_join(sms_fc, outTable, field, "FLOAT")
-    return created_enhancements
+  # #-----------------------------------------------
+  # #-----------------------------------------------
+  # #Segment each surface separately using SMS
+  # #
 
-  created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
-  arcpy.DefineProjection_management(sms_fc, projection)
+  # spectral_detail = 20
+  # spatial_detail = 20
+  # min_seg_size = 1
 
-  #-----------------------------------------------
-  #-----------------------------------------------
-  # Fuzzy rule classifier
-  #
-  #Primitive types = [vegetation, impervious, water, confusion]
-  #Land cover types = [tree, shrub, grass, pavement, building, water]
-  #
-  # Stages:
-  #   1. Classify object based on majority primitive type
-  #   2. Classify each primitive object based on IE and height
+  # surfaces = ["ground", "nonground"]
+  # naip_lst = []
+  # ground_mask_poly = []
 
-  def classify(stage, landcover, field):
-    if stage == "S1":
-      if field == "S1_grid":
-            #-----------------------------------------------
-            #-----------------------------------------------
-            # Thresholds
-            healthy = ">= 250" #[250,255]
-            dry = "<= 249"  #[0, 249]
-            #con = ""
-            #-----------------------------------------------
-            return("def landcover(x):\\n"+
-                   "  if x "+healthy+":\\n"+
-                   "    return \"healthy\"\\n"+
-                   "  elif x "+dry+":\\n"+
-                   "    return \"senescent\"\\n"+
-                   "  return \"impervious\""
-                   )
+  # for surface in surfaces:
+
+  # # Try running SMS on each surface
+  #   sms_raster = os.path.join(scratchgdb, surface+"_sms_raster")
+  #   naip_fc =  os.path.join(scratchgdb, surface + "_naip_fc")
+  #   mask_poly = os.path.join(scratchgdb, surface+ "_mask_poly")
+  #   mask = mask_poly
+  #   sms = os.path.join(scratchgdb, surface+"_sms")
+  #   naip_mask = os.path.join(scratchgdb,surface + "_naip")
+  #   mask_raw = os.path.join(scratchgdb, surface + "_mask_raw")
+  #   dissolve_output = os.path.join(scratchgdb, surface + "_mask_dis")
+
+  #   #-----------------------------------------------
+  #   #-----------------------------------------------
+  #   text = "Extracting NAIP imagery by "+ surface + " mask."
+  #   generateMessage(text)
+  #   #-----------------------------------------------
+  #   this = ExtractByMask(naip_zone, mask)
+  #   this.save(naip_mask)
+  #   surface_raster_slide = Con(IsNull(Float(naip_mask)),-10000,Float(naip_mask))
+
+  #   #-----------------------------------------------
+  #   #-----------------------------------------------
+  #   text = "Segmenting NAIP imagery into "+ surface + " objects."
+  #   generateMessage(text)
+  #   #-----------------------------------------------
+
+  #   seg_naip = SegmentMeanShift(surface_raster_slide, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
+  #   seg_naip.save(sms_raster)
+  #   arcpy.RasterToPolygon_conversion(sms_raster, naip_fc, "NO_SIMPLIFY", "VALUE")
+
+  #   #-----------------------------------------------
+  #   #-----------------------------------------------
+  #   text = "Clipping "+ surface + " objects to mask."
+  #   generateMessage(text)
+  #   #-----------------------------------------------
+  #   arcpy.Clip_analysis(naip_fc, mask_poly, sms)
+
+  #   naip_lst.extend([sms])
+
+  # #-----------------------------------------------
+  # #-----------------------------------------------
+  # text = "Merging ground and nonground objects."
+  # generateMessage(text)
+  # #-----------------------------------------------
+
+  # #-----------------------------------------------
+  # #-----------------------------------------------
+  # # Merge surface layers
+  # #
+
+  # arcpy.Merge_management(naip_lst, sms_fc)
+  # arcpy.AddField_management(sms_fc, "JOIN", "INTEGER")
+  # rows = arcpy.UpdateCursor(sms_fc)
+  # i = 1
+  # for row in rows:
+  #   row.setValue("JOIN", i)
+  #   rows.updateRow(row)
+  #   i+= 1
+
+  # #-----------------------------------------------
+  # #-----------------------------------------------
+  # # Create Image Enhancements and join to objects
+  # #
+
+  # image_enhancements = ["ndvi", "ndwi", "gndvi", "osavi", "height"]
+
+
+  # def normalize(index):
+  #     return (2 * (Float(index) - Float(index.minimum)) / (Float(index.maximum) - Float(index.minimum))) - 1
+
+  # def createImageEnhancements(x, join, cell_size, created_enhancements):
+
+  #   for field in image_enhancements:
+  #     enhancement_path = os.path.join(scratchgdb, field+"_"+str(zone_num))
+  #     outTable = os.path.join(scratchgdb, "zonal_"+field)
+
+  #     # -----------------------------------------------
+  #     # -----------------------------------------------
+  #     text = "Computing " + field + " at "+cell_size+"m."
+  #     generateMessage(text)
+  #     # -----------------------------------------------
+
+  #     if field == "ndvi":
+  #       inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b1))) / ((Float(naip_zone_b4))+(Float(naip_zone_b1)))
+  #       inValueRaster.save(enhancement_path)
+  #       ie = enhancement_path
+  #     elif field == "ndwi":
+  #       inValueRaster = ((Float(naip_zone_b2))-(Float(naip_zone_b4))) / ((Float(naip_zone_b2))+(Float(naip_zone_b4)))
+  #       inValueRaster.save(enhancement_path)
+  #       ie = enhancement_path
+  #     elif field == "gndvi":
+  #       inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b2))) / ((Float(naip_zone_b4))+(Float(naip_zone_b2)))
+  #       inValueRaster.save(enhancement_path)
+  #       ie = enhancement_path
+  #     elif field == "osavi":
+  #       inValueRaster = normalize((1.5 * (Float(naip_zone_b4) - Float(naip_zone_b1))) / ((Float(naip_zone_b4)) + (Float(naip_zone_b1)) + 0.16))
+  #       inValueRaster.save(enhancement_path)
+  #       ie = enhancement_path
+  #     elif field == "height":
+  #       enhancement_path = heights_zone
+
+  #     created_enhancements.append(enhancement_path)
+  #     if join == "yes":
+
+  #       # -----------------------------------------------
+  #       # -----------------------------------------------
+  #       text = "Joining mean " + field + " to each object."
+  #       generateMessage(text)
+  #       # -----------------------------------------------
+
+  #       z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", enhancement_path, outTable, "NODATA", "MEAN")
+
+  #       arcpy.AddField_management(outTable, field, "FLOAT")
+  #       arcpy.CalculateField_management(outTable, field, "[MEAN]")
+  #       one_to_one_join(sms_fc, outTable, field, "FLOAT")
+  #   return created_enhancements
+
+  # created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
+  # arcpy.DefineProjection_management(sms_fc, projection)
+
+  # #-----------------------------------------------
+  # #-----------------------------------------------
+  # # Fuzzy rule classifier
+  # #
+  # #Primitive types = [vegetation, impervious, water, confusion]
+  # #Land cover types = [tree, shrub, grass, pavement, building, water]
+  # #
+  # # Stages:
+  # #   1. Classify object based on majority primitive type
+  # #   2. Classify each primitive object based on IE and height
+
+  # def classify(stage, landcover, field):
+  #   if stage == "S1":
+  #     if field == "S1_grid":
+  #           #-----------------------------------------------
+  #           #-----------------------------------------------
+  #           # Thresholds
+  #           healthy = ">= 250" #[250,255]
+  #           dry = "<= 249"  #[0, 249]
+  #           #con = ""
+  #           #-----------------------------------------------
+  #           return("def landcover(x):\\n"+
+  #                  "  if x "+healthy+":\\n"+
+  #                  "    return \"healthy\"\\n"+
+  #                  "  elif x "+dry+":\\n"+
+  #                  "    return \"senescent\"\\n"+
+  #                  "  return \"impervious\""
+  #                  )
     
-      elif field == "S1_ndvi":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          imp = "-0.88 <= x <= -0.2" #[-1, -0.05]
-          veg = "-0.18 <= x <= 0.5"  #[0.02, 1]
-          #-----------------------------------------------
-          return ("def landcover(x):\\n"+
-                 "  membership = \"\"\\n"+
-                 "  if "+imp+":\\n"+
-                 "    membership += \"I\"\\n"+
-                 "  if "+veg+":\\n"+
-                 "    membership += \"V\"\\n"+
-                 "  return membership\\n"
-                 )
+  #     elif field == "S1_ndvi":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         imp = "-0.88 <= x <= -0.2" #[-1, -0.05]
+  #         veg = "-0.18 <= x <= 0.5"  #[0.02, 1]
+  #         #-----------------------------------------------
+  #         return ("def landcover(x):\\n"+
+  #                "  membership = \"\"\\n"+
+  #                "  if "+imp+":\\n"+
+  #                "    membership += \"I\"\\n"+
+  #                "  if "+veg+":\\n"+
+  #                "    membership += \"V\"\\n"+
+  #                "  return membership\\n"
+  #                )
 
-      elif field == "S1_ndwi":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          imp = "0.24 <= x <= 0.91"  #[0.085, 0.66]
-          veg = "-0.41 <= x <= 0.18" #[-1, 0.085]
-          #-----------------------------------------------
-          return ("def landcover(x):\\n"+
-                 "  membership = \"\"\\n"+
-                 "  if "+imp+":\\n"+
-                 "    membership += \"I\"\\n"+
-                 "  if "+veg+":\\n"+
-                 "    membership += \"V\"\\n"+
-                 "  return membership\\n"
-                 )
+  #     elif field == "S1_ndwi":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         imp = "0.24 <= x <= 0.91"  #[0.085, 0.66]
+  #         veg = "-0.41 <= x <= 0.18" #[-1, 0.085]
+  #         #-----------------------------------------------
+  #         return ("def landcover(x):\\n"+
+  #                "  membership = \"\"\\n"+
+  #                "  if "+imp+":\\n"+
+  #                "    membership += \"I\"\\n"+
+  #                "  if "+veg+":\\n"+
+  #                "    membership += \"V\"\\n"+
+  #                "  return membership\\n"
+  #                )
       
-      elif field == "S1_gndv":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          imp = "-0.94<= x <= -0.17"  #[0.085, 0.66]
-          veg = "-0.3 <= x <= 0.38" #[-1, 0.085]
-          #-----------------------------------------------
-          return ("def landcover(x):\\n"+
-                 "  membership = \"\"\\n"+
-                 "  if "+imp+":\\n"+
-                 "    membership += \"I\"\\n"+
-                 "  if "+veg+":\\n"+
-                 "    membership += \"V\"\\n"+
-                 "  return membership\\n"
-                 )
+  #     elif field == "S1_gndv":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         imp = "-0.94<= x <= -0.17"  #[0.085, 0.66]
+  #         veg = "-0.3 <= x <= 0.38" #[-1, 0.085]
+  #         #-----------------------------------------------
+  #         return ("def landcover(x):\\n"+
+  #                "  membership = \"\"\\n"+
+  #                "  if "+imp+":\\n"+
+  #                "    membership += \"I\"\\n"+
+  #                "  if "+veg+":\\n"+
+  #                "    membership += \"V\"\\n"+
+  #                "  return membership\\n"
+  #                )
 
-      elif field == "S1_osav":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          imp = "-0.94 <= x <= -0.25"  #[0.085, 0.66]
-          veg = "-0.15 <= x <= 0.76" #[-1, 0.085]
-          #-----------------------------------------------
-          return ("def landcover(x):\\n"+
-                 "  membership = \"\"\\n"+
-                 "  if "+imp+":\\n"+
-                 "    membership += \"I\"\\n"+
-                 "  if "+veg+":\\n"+
-                 "    membership += \"V\"\\n"+
-                 "  return membership\\n"
-                 )
+  #     elif field == "S1_osav":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         imp = "-0.94 <= x <= -0.25"  #[0.085, 0.66]
+  #         veg = "-0.15 <= x <= 0.76" #[-1, 0.085]
+  #         #-----------------------------------------------
+  #         return ("def landcover(x):\\n"+
+  #                "  membership = \"\"\\n"+
+  #                "  if "+imp+":\\n"+
+  #                "    membership += \"I\"\\n"+
+  #                "  if "+veg+":\\n"+
+  #                "    membership += \"V\"\\n"+
+  #                "  return membership\\n"
+  #                )
       
-      elif field == "S1":
-          return("def landcover(a,b,c,d):\\n"+
-                 "  membership = a+b+c+d\\n"+
-                 "  V,I = 0,0\\n"+
-                 "  for m in membership:\\n"+
-                 "    if m == \"V\":\\n"+
-                 "      V += 1\\n"+
-                 "    if m == \"I\":\\n"+
-                 "      I += 1\\n"+                  
-                 "  if V > I:\\n"+
-                 "    return \"vegetation\"\\n"+
-                 "  elif I > V:\\n"+
-                 "    return \"impervious\"\\n"+
-                 "  else:\\n"+
-                 "    return \"confusion\"\\n"
-                 )
+  #     elif field == "S1":
+  #         return("def landcover(a,b,c,d):\\n"+
+  #                "  membership = a+b+c+d\\n"+
+  #                "  V,I = 0,0\\n"+
+  #                "  for m in membership:\\n"+
+  #                "    if m == \"V\":\\n"+
+  #                "      V += 1\\n"+
+  #                "    if m == \"I\":\\n"+
+  #                "      I += 1\\n"+                  
+  #                "  if V > I:\\n"+
+  #                "    return \"vegetation\"\\n"+
+  #                "  elif I > V:\\n"+
+  #                "    return \"impervious\"\\n"+
+  #                "  else:\\n"+
+  #                "    return \"confusion\"\\n"
+  #                )
 
-    elif stage == "S2":
-      if landcover == "vegetation":
-        if field == "S2_grid":
-            #-----------------------------------------------
-            #-----------------------------------------------
-            # Thresholds
-            dry = ">= 250"    #[250, 255]
-            healthy = "<= 249"    #(0, 249]
-            #con = ""
-            #-----------------------------------------------
-            return("def landcover(x):\\n"+
-                   "  if x "+dry+":\\n"+
-                   "    return \"dry\"\\n"+
-                   "  elif x "+shr+":\\n"+
-                   "    return \"healthy\"\\n"+
-                   "  else:\\n"+
-                   "    return \"confusion\""
-                   )
+  #   elif stage == "S2":
+  #     if landcover == "vegetation":
+  #       if field == "S2_grid":
+  #           #-----------------------------------------------
+  #           #-----------------------------------------------
+  #           # Thresholds
+  #           dry = ">= 250"    #[250, 255]
+  #           healthy = "<= 249"    #(0, 249]
+  #           #con = ""
+  #           #-----------------------------------------------
+  #           return("def landcover(x):\\n"+
+  #                  "  if x "+dry+":\\n"+
+  #                  "    return \"dry\"\\n"+
+  #                  "  elif x "+shr+":\\n"+
+  #                  "    return \"healthy\"\\n"+
+  #                  "  else:\\n"+
+  #                  "    return \"confusion\""
+  #                  )
                 
-        elif field == "S2_heig":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          gra = "x <= 2"    #[0, 2]
-          shr = "x <= 6"    #(2, 6]
-          #tre = ""
-          #-----------------------------------------------
-          return("def landcover(x):\\n"+
-                 "  if "+gra+":\\n"+
-                 "    return \"grass\"\\n"+
-                 "  elif "+shr+":\\n"+
-                 "    return \"shrub\"\\n"+
-                 "  else:\\n"+
-                 "    return \"tree\""
-                 )
+  #       elif field == "S2_heig":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         gra = "x <= 2"    #[0, 2]
+  #         shr = "x <= 6"    #(2, 6]
+  #         #tre = ""
+  #         #-----------------------------------------------
+  #         return("def landcover(x):\\n"+
+  #                "  if "+gra+":\\n"+
+  #                "    return \"grass\"\\n"+
+  #                "  elif "+shr+":\\n"+
+  #                "    return \"shrub\"\\n"+
+  #                "  else:\\n"+
+  #                "    return \"tree\""
+  #                )
       
-        elif field == "S2":
-          return("def landcover(a, b):\\n"+
-                 "  if b != \"confusion\":\\n"+
-                 "    return a "
-                 )
+  #       elif field == "S2":
+  #         return("def landcover(a, b):\\n"+
+  #                "  if b != \"confusion\":\\n"+
+  #                "    return a "
+  #                )
 
-      elif landcover == "impervious":
+  #     elif landcover == "impervious":
         
-        if field == "S2_heig":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          pat = "x <= 2" #[0, 2]
-          #bui = ""
-          #-----------------------------------------------
-          return("def landcover(x):\\n"+
-                 "  if "+pat+":\\n"+
-                 "    return \"path\"\\n"+
-                 "  else:\\n"+
-                 "    return \"building\""
-                 )
+  #       if field == "S2_heig":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         pat = "x <= 2" #[0, 2]
+  #         #bui = ""
+  #         #-----------------------------------------------
+  #         return("def landcover(x):\\n"+
+  #                "  if "+pat+":\\n"+
+  #                "    return \"path\"\\n"+
+  #                "  else:\\n"+
+  #                "    return \"building\""
+  #                )
       
-        elif field == "S2_ndwi":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          imp = "0.1 <= x <= 0.91" #[0, 0.4]
-          #-----------------------------------------------
-          return ("def landcover(x):\\n"+
-                  "  if "+imp+":\\n"+
-                  "    return \"I\"\\n"+
-                  "  return \"confusion\""
-                  )
+  #       elif field == "S2_ndwi":
+  #         #-----------------------------------------------
+  #         #-----------------------------------------------
+  #         # Thresholds
+  #         imp = "0.1 <= x <= 0.91" #[0, 0.4]
+  #         #-----------------------------------------------
+  #         return ("def landcover(x):\\n"+
+  #                 "  if "+imp+":\\n"+
+  #                 "    return \"I\"\\n"+
+  #                 "  return \"confusion\""
+  #                 )
 
-        elif field == "S2":
-          return ("def landcover(a, b):\\n"+
-                  "  if b == \"I\":\\n"+
-                  "    return a\\n"+
-                  "  else:\\n"+
-                  "    return \"confusion\""
-                  )
+  #       elif field == "S2":
+  #         return ("def landcover(a, b):\\n"+
+  #                 "  if b == \"I\":\\n"+
+  #                 "    return a\\n"+
+  #                 "  else:\\n"+
+  #                 "    return \"confusion\""
+  #                 )
 
-  def createClassMembership(stage, landcover, field, field_lst, output):
-      if field in stages:
+  # def createClassMembership(stage, landcover, field, field_lst, output):
+  #     if field in stages:
 
-          field_lst = field_lst[:-2]
-          fxn = "landcover("+field_lst+")"
-      else:
+  #         field_lst = field_lst[:-2]
+  #         fxn = "landcover("+field_lst+")"
+  #     else:
 
-          index = field
-          field = stage+"_"+field[:4]
-          field_lst += "!"+field+"!, "
-          fxn = "landcover(!"+index+"!)"
+  #         index = field
+  #         field = stage+"_"+field[:4]
+  #         field_lst += "!"+field+"!, "
+  #         fxn = "landcover(!"+index+"!)"
           
-      label_class = classify(stage, landcover, field)
-      arcpy.AddField_management(output, field, "TEXT")
-      arcpy.CalculateField_management(output, field, fxn, "PYTHON_9.3", label_class)
-      return field_lst
-  #-----------------------------------------------
-  #-----------------------------------------------
-  # Classifier methods
-  #
+  #     label_class = classify(stage, landcover, field)
+  #     arcpy.AddField_management(output, field, "TEXT")
+  #     arcpy.CalculateField_management(output, field, fxn, "PYTHON_9.3", label_class)
+  #     return field_lst
+  # #-----------------------------------------------
+  # #-----------------------------------------------
+  # # Classifier methods
+  # #
 
-  stages = ["S1","S2"]
-  class_structure = [
-                     ["vegetation",
-                          ["grass", "shrub", "tree"]],
-                     ["impervious",
-                          ["building", "path"]]
-                    ]
+  # stages = ["S1","S2"]
+  # class_structure = [
+  #                    ["vegetation",
+  #                         ["grass", "shrub", "tree"]],
+  #                    ["impervious",
+  #                         ["building", "path"]]
+  #                   ]
 
-  s1_indices = ["ndvi", "ndwi", "gndvi", "osavi"]#, "gridcode"]
-  s2_indices = ["height", "ndwi"]#, "gridcode"]
+  # s1_indices = ["ndvi", "ndwi", "gndvi", "osavi"]#, "gridcode"]
+  # s2_indices = ["height", "ndwi"]#, "gridcode"]
 
-  for stage in stages:
-      #-----------------------------------------------
-      #-----------------------------------------------
-      text = "Executing Stage "+str(stage)+" classification."
-      generateMessage(text)
-      #-----------------------------------------------
-      if stage == "S1":
-        s1_indices.extend([stage])
-        field_lst = ""
+  # for stage in stages:
+  #     #-----------------------------------------------
+  #     #-----------------------------------------------
+  #     text = "Executing Stage "+str(stage)+" classification."
+  #     generateMessage(text)
+  #     #-----------------------------------------------
+  #     if stage == "S1":
+  #       s1_indices.extend([stage])
+  #       field_lst = ""
         
-        for field in s1_indices:
+  #       for field in s1_indices:
 
-          if field == "S1":
-              #-----------------------------------------------
-              #-----------------------------------------------
-              text = "Creating primitive-type objects."
-              generateMessage(text)
-              #-----------------------------------------------
-              createClassMembership(stage, "", field, field_lst, sms_fc)
+  #         if field == "S1":
+  #             #-----------------------------------------------
+  #             #-----------------------------------------------
+  #             text = "Creating primitive-type objects."
+  #             generateMessage(text)
+  #             #-----------------------------------------------
+  #             createClassMembership(stage, "", field, field_lst, sms_fc)
 
-              for primitive in class_structure:
-                  output = os.path.join(outputs, primitive[0]+"_"+str(zone_num)+".shp")
-                  where_clause = field + " = '" + primitive[0] + "'"
-                  arcpy.Select_analysis(sms_fc, output, where_clause)
-                  if primitive == "vegetation":
-                    lst_merge.append(output)
+  #             for primitive in class_structure:
+  #                 output = os.path.join(outputs, primitive[0]+"_"+str(zone_num)+".shp")
+  #                 where_clause = field + " = '" + primitive[0] + "'"
+  #                 arcpy.Select_analysis(sms_fc, output, where_clause)
+  #                 if primitive == "vegetation":
+  #                   lst_merge.append(output)
                 
                   
-          else:
-              #-----------------------------------------------
-              #-----------------------------------------------
-              text = "Classifying objects by "+field+"."
-              generateMessage(text)
-              #-----------------------------------------------
-              field_lst = createClassMembership(stage, "", field, field_lst, sms_fc)
+  #         else:
+  #             #-----------------------------------------------
+  #             #-----------------------------------------------
+  #             text = "Classifying objects by "+field+"."
+  #             generateMessage(text)
+  #             #-----------------------------------------------
+  #             field_lst = createClassMembership(stage, "", field, field_lst, sms_fc)
 
-      if stage == "S2":
-          s2_indices.extend([stage])
-          merge_lst = []
-          for primitive in class_structure:
-              stage_output = os.path.join(outputs, primitive[0]+"_"+str(zone_num)+".shp")
-              landcover = primitive[0]
-              field_lst = ""
+  #     if stage == "S2":
+  #         s2_indices.extend([stage])
+  #         merge_lst = []
+  #         for primitive in class_structure:
+  #             stage_output = os.path.join(outputs, primitive[0]+"_"+str(zone_num)+".shp")
+  #             landcover = primitive[0]
+  #             field_lst = ""
 
-              for field in s2_indices:
-                  if field == "S2":
-                      #-----------------------------------------------
-                      #-----------------------------------------------
-                      text = "Creating "+primitive[0]+"-class objects."
-                      generateMessage(text)
-                      #-----------------------------------------------
-                      createClassMembership(stage, landcover, field, field_lst, stage_output)
+  #             for field in s2_indices:
+  #                 if field == "S2":
+  #                     #-----------------------------------------------
+  #                     #-----------------------------------------------
+  #                     text = "Creating "+primitive[0]+"-class objects."
+  #                     generateMessage(text)
+  #                     #-----------------------------------------------
+  #                     createClassMembership(stage, landcover, field, field_lst, stage_output)
                           
-                  else:
-                      #-----------------------------------------------
-                      #-----------------------------------------------
-                      text = "Classifying "+primitive[0]+" objects by "+field+"."
-                      generateMessage(text)
-                      #-----------------------------------------------
+  #                 else:
+  #                     #-----------------------------------------------
+  #                     #-----------------------------------------------
+  #                     text = "Classifying "+primitive[0]+" objects by "+field+"."
+  #                     generateMessage(text)
+  #                     #-----------------------------------------------
                       
-                      field_lst = createClassMembership(stage, landcover, field, field_lst, stage_output)
+  #                     field_lst = createClassMembership(stage, landcover, field, field_lst, stage_output)
 
 
-  zones = searchcursor.next()
+  # zones = searchcursor.next()
 
 confused = os.path.join(outputs, "confused.shp")
 veg_join = os.path.join(scratchgdb, "veg_join")
 training_samples = os.path.join(outputs, "training_fc.shp")
 
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Preparing 'Confused' objects for SVM."
+generateMessage(text)
+#-----------------------------------------------
+vegetation = os.path.join(outputs, "vegetation_0.shp")
+impervious = os.path.join(outputs, "impervious_0.shp")
+
 if len(lst_merge) > 1:
   arcpy.Merge_management(lst_merge, veg_join)
 else:
-  veg_join = lst_merge[0]
+  veg_join = vegetation#lst_merge[0]
 arcpy.Dissolve_management(veg_join, training_samples, ["S2"])
 
 arcpy.Erase_analysis (sms_fc, veg_join, confused)
@@ -669,147 +677,86 @@ band_lst = ["ndvi", "ndwi", "height"]
 
 def createLayerComposite(bands):   
   composite = os.path.join(outputs, "composite.tif")
-  bands_5m = createImageEnhancements(bands, "no", "5", [])
-  arcpy.CompositeBands_management(bands_5m, composite)
-  arcpy.DefineProjection_management(composite, projection)
+  # bands_5m = createImageEnhancements(bands, "no", "5", [])
+  # arcpy.CompositeBands_management(bands_5m, composite)
+  # arcpy.DefineProjection_management(composite, projection)
 createLayerComposite(band_lst)
-
-
-###-----------------------------------------------
-###-----------------------------------------------
-##text = "Generating " +str(num_training)+" samples for each landcover class."
-##generateMessage(text)
-###-----------------------------------------------
-##
-###-----------------------------------------------
-###-----------------------------------------------
-### Generate Training Samples
-###
-##
-##training_samples = os.path.join(outputs, "training_fc.shp")
-##
-##def gen_samples(classes):
-##  def gen_training(num_training, num_samples, sample_type):
-##      
-##          def choose_samples(count, sample_selection, num_training, sample_type):
-##              while count < num_training:
-##                  #-----------------------------------------------
-##                  #-----------------------------------------------
-##                  # Generate Random Samples
-##                  #
-##                  if sample_type == "random":
-##                    row_num = randint(1, num_samples)
-##                    if row_num in sample_selection:
-##                      return choose_samples(count, sample_selection, num_training, sample_type)
-##                    sample_selection.append(row_num)
-##                    count += 1
-##                  #-----------------------------------------------
-##                  #-----------------------------------------------
-##                  # Generate All Samples
-##                  #
-##                  if sample_type == "all":
-##                      for i in range(num_training):
-##                        sample_selection.append(i+1)
-##                      count == num_training
-##              return sample_selection
-##          return choose_samples(0, [], num_training, sample_type)
-##  landcover = os.path.join(scratchgdb, classes[0])
-##  labels = classes[1]
-##
-##  for label in labels:
-##    samples = os.path.join(scratchgdb, label)
-##    max_rows = int(arcpy.GetCount_management(samples).getOutput(0))
-##    training = os.path.join(scratchgdb, label + "_selects")
-##    training_dissolve = os.path.join(scratchgdb, label+ "_training")
-##
-##    if max_rows >= num_training:
-##      where_clause = "\"stage2\"= '" + label + "'"
-##      arcpy.Select_analysis(landcover, samples, where_clause)
-##      num_samples = int(str(arcpy.GetCount_management(samples)))
-##
-##      if num_samples > 0:
-##        row_num = gen_training(num_training, num_samples, sample_type)
-##        where_clause = "("
-##        for row in row_num:
-##            where_clause += str(row) + ", "
-##        where_clause = where_clause[:-2] + ")"
-##        arcpy.Select_analysis(samples, training, "OBJECTID in " + where_clause)
-##        arcpy.Dissolve_management(training, training_dissolve, "stage2")
-##        arcpy.AddMessage("Created {0} {1} training samples.".format(num_training, label))
-##        training_merge.extend([training_dissolve])
-##
-##    else:
-##      arcpy.Select_analysis(samples, training)
-##      arcpy.Dissolve_management(training, training_dissolve, "stage2")
-##      training_merge.extend([training_dissolve])
-##      arcpy.AddMessage("Samples for " + label + " were limited to " + str(max_rows) + ".")
-##
-##training_merge = []
-##for classes in class_structure:
-##    gen_samples(classes)
-##
-###-----------------------------------------------
-###-----------------------------------------------
-##text = "Merging newly created training samples into one layer."
-##generateMessage(text)
-###-----------------------------------------------
-
-###-----------------------------------------------
-###-----------------------------------------------
-### Merging training samples
-###
-##arcpy.Merge_management(training_merge, training_samples)
-##
-### Layer stack
-##
-###-----------------------------------------------
-###-----------------------------------------------
-##text = "Coarsening NAIP to "+coarsening_size+"m."
-##generateMessage(text)
-###-----------------------------------------------
-##
-##def createLayerComposite(bands):
-##    
-##    composite = os.path.join(outputs, "composite.tif")
-##    arcpy.CompositeBands_management(bands, composite)
-##    arcpy.DefineProjection_management(composite, projection)
-##
-##
-
-
-
 
 
 #-----------------------------------------------
 #-----------------------------------------------
 # FORMAT TRAINING
-# svm_training = os.path.join(scratchgdb, "svm_training.shp")
-# arcpy.FeatureClassToFeatureClass_conversion (training_samples, outputs, "svm_training.shp")
-# training_fields = [["Classname", "TEXT"], ["Classvalue", "LONG"], ["RED", "LONG"], ["GREEN", "LONG"], ["BLUE", "LONG"], ["Count", "LONG"]]
-# for field in training_fields:
-#   field_name = field[0]
-#   field_type = field[1]
-#   arcpy.AddField_management(svm_training, field_name, field_type)
-# i = 1
-# training_samples_rows = int(arcpy.GetCount_management(svm_training).getOutput(0))
-# arcpy.ZonalStatisticsAsTable(svm_training, "OBJECTID", composite, zonal_training, "NODATA", "ALL")
-
-# where_clause = "OBJECTID"
-# arcpy.CalculateField_management(training_samples, "Classvalue", "[OBJECTID]")
-# arcpy.CalculateField_management(training_samples, "Classname", "Class " + "[OBJECTID]")
-
-
-#arcpy.AddMessage("All training samples created.")
-#arcpy.Merge_management(testing_merge, testing_samples)
-#arcpy.AddMessage("All testing samples created.")
 
 #-----------------------------------------------
 #-----------------------------------------------
-# Generate Fuel Model
-#
-# fuelComplex(svm_fc, "13", projection, unit)
-#
+text = "Preparing training samples for SVM."
+generateMessage(text)
+#-----------------------------------------------
+svm_training = os.path.join(scratchgdb, "svm_training")
+arcpy.FeatureClassToFeatureClass_conversion (training_samples, scratchgdb, "svm_training")
+training_fields = [["Classname", "TEXT"], ["Classvalue", "LONG"], ["RED", "LONG"], ["GREEN", "LONG"], ["BLUE", "LONG"], ["Count", "LONG"]]
+for field in training_fields:
+  field_name = field[0]
+  field_type = field[1]
+  arcpy.AddField_management(svm_training, field_name, field_type)
 
+zonal_training = os.path.join(scratchgdb, "zonal_train")
+arcpy.ZonalStatisticsAsTable(svm_training, "FID", composite, zonal_training, "NODATA", "COUNT")
+one_to_one_join(svm_training, zonal_training, "FID", "LONG")
+
+searchcursor = arcpy.SearchCursor(svm_training)
+searchTrainingCount = arcpy.SearchCursor
+row = searchcursor.next()
+while row:
+  for field in training_fields:
+    field_name = field[0]
+    row.setValue("Classname", row.getValue("S2"))
+    row.setValue("Classvalue", row.getValue("FID") + 1)
+    row.setValue("RED", 1)
+    row.setValue("GREEN", 1)
+    row.setValue("BLUE", 1)
+    row.setValue("Count", row.getValue("COUNT"))
+  row = searchcursor.next()
+
+fields = arcpy.ListFields(svm_training)
+for field in fields:
+  if field not in ["FID", "Shape", "Classname", "Classvalue", "RED", "GREEN", "BLUE", "Count"]:
+    arcpy.DeleteField_management (svm_training, field)
+
+
+out_definition = os.path.join(outputs, "svm_classifier.ecd")
+maxNumSamples = "100"
+attributes = ""
+
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Training Support Vector Machine."
+generateMessage(text)
+#-----------------------------------------------
+
+arcpy.gp.TrainSupportVectorMachineClassifier(composite, svm_training, out_definition, "", maxNumSamples, attributes)
+
+svm = os.path.join(scratchgdb, "svm")
+
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Classifying composite with Support Vector Machine."
+generateMessage(text)
+#-----------------------------------------------
+classifiedraster = ClassifyRaster(composite, out_definition, "")
+classifiedraster.save(svm)
+
+#-----------------------------------------------
+#-----------------------------------------------
+text = "Joining SVM classified outputs to 'Confused' objects."
+generateMessage(text)
+#-----------------------------------------------
+zonal_svm = os.path.join(scratchgdb, "zonal_svm")
+arcpy.ZonalStatisticsAsTable(confused, "JOIN", svm, zonal_svm, "NODATA", "MAJORITY")
+one_to_one_join(confused, zonal_svm, "JOIN", "LONG")
+
+classified = os.path.join(outputs, "classified.shp")
+arcpy.Merge_management([confused, vegetation, impervious], classified)
 
 #-----------------------------------------------
 #-----------------------------------------------
