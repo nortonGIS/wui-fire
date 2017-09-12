@@ -170,152 +170,152 @@ while zones:
   #feature objects
   sms_fc = os.path.join(scratchgdb, "sms_fc_"+str(zone_num))
   lst_merge = []
-  # #-----------------------------------------------
-  # text = "Extracting NAIP and heights by zone "+str(zone_num)+" boundary."
-  # generateMessage(text)
-  # #-----------------------------------------------
-  # #-----------------------------------------------
+  #-----------------------------------------------
+  text = "Extracting NAIP and heights by zone "+str(zone_num)+" boundary."
+  generateMessage(text)
+  #-----------------------------------------------
+  #-----------------------------------------------
   
-  # arcpy.Select_analysis(bnd_zones, bnd, where_clause)
+  arcpy.Select_analysis(bnd_zones, bnd, where_clause)
                          
-  # this = ExtractByMask(naip, bnd)
-  # this.save(naip_zone)
-  # this = ExtractByMask(scaled_heights, bnd)
-  # this.save(heights_zone)
+  this = ExtractByMask(naip, bnd)
+  this.save(naip_zone)
+  this = ExtractByMask(scaled_heights, bnd)
+  this.save(heights_zone)
 
-  # #-----------------------------------------------
-  # text = "Creating ground and non-ground surfaces."
-  # generateMessage(text)
-  # #-----------------------------------------------
-  # #-----------------------------------------------
-
-
-  # #Variables
-  # ground_mask_poly = os.path.join(scratchgdb, "ground_mask_poly")
-  # nonground_mask_poly = os.path.join(scratchgdb, "nonground_mask_poly")
-  # ground_mask_raw = os.path.join(scratchgdb, "ground_mask_raw")
-  # nonground_mask_raw = os.path.join(scratchgdb, "nonground_mask_raw")
-  # ground_dissolve_output = os.path.join(scratchgdb, "ground_mask_dis")
-  # nonground_dissolve_output = os.path.join(scratchgdb, "nonground_mask_dis")
-  # ground_mask_raster = os.path.join(scratchgdb, "ground_mask_raster")
-  # nonground_mask_raster = os.path.join(scratchgdb, "nonground_mask_raster")
-  # nonground_mask_resample = os.path.join(scratchgdb, "nonground_mask_resample")
-  # ground_mask_resample = os.path.join(scratchgdb, "ground_mask_resample")
+  #-----------------------------------------------
+  text = "Creating ground and non-ground surfaces."
+  generateMessage(text)
+  #-----------------------------------------------
+  #-----------------------------------------------
 
 
-  # #Find minimum cell area
-  # min_cell_area = int(float(str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", "")))**2)+1
-  # where_clause = "Shape_Area > " + str(min_cell_area)
-
-  # #Create masks for ground and nonground features according to ground_ht_threshold
-  # ground_ht_threshold = 2 #ft
-
-  # mask = SetNull(Int(heights_zone),Int(heights_zone),"VALUE > " + str(ground_ht_threshold))
-  # arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
-  # arcpy.Dissolve_management(ground_mask_raw, ground_dissolve_output)
-
-  # #Find cell size of imagery
-  # cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
-
-  # arcpy.Erase_analysis(bnd, ground_dissolve_output, nonground_mask_raw)
-
-  # arcpy.PolygonToRaster_conversion(nonground_mask_raw, "OBJECTID", nonground_mask_raster, "CELL_CENTER", "", cell_size)
-  # arcpy.RasterToPolygon_conversion(nonground_mask_raster, nonground_mask_raw, "NO_SIMPLIFY", "VALUE")
-  # where_clause = "Shape_Area > " + str(min_cell_area)
-  # arcpy.Select_analysis(nonground_mask_raw, nonground_mask_poly, where_clause)
-
-  # arcpy.Erase_analysis(bnd, nonground_mask_poly, ground_mask_poly)
-  # arcpy.PolygonToRaster_conversion(ground_mask_poly, "OBJECTID", ground_mask_raster, "CELL_CENTER", "", cell_size)
-  # arcpy.RasterToPolygon_conversion(ground_mask_raster, ground_mask_raw, "NO_SIMPLIFY", "VALUE")
-  # arcpy.Select_analysis(ground_mask_raw, ground_mask_poly, where_clause)
-
-  # arcpy.Erase_analysis(bnd, ground_mask_poly, nonground_mask_poly)
-
-  # #-----------------------------------------------
-  # #-----------------------------------------------
-  # #Segment each surface separately using SMS
-  # #
-
-  # spectral_detail = 20
-  # spatial_detail = 20
-  # min_seg_size = 1
-
-  # surfaces = ["ground", "nonground"]
-  # naip_lst = []
-  # ground_mask_poly = []
-
-  # for surface in surfaces:
-
-  # # Try running SMS on each surface
-  #   sms_raster = os.path.join(scratchgdb, surface+"_sms_raster")
-  #   naip_fc =  os.path.join(scratchgdb, surface + "_naip_fc")
-  #   mask_poly = os.path.join(scratchgdb, surface+ "_mask_poly")
-  #   mask = mask_poly
-  #   sms = os.path.join(scratchgdb, surface+"_sms")
-  #   naip_mask = os.path.join(scratchgdb,surface + "_naip")
-  #   mask_raw = os.path.join(scratchgdb, surface + "_mask_raw")
-  #   dissolve_output = os.path.join(scratchgdb, surface + "_mask_dis")
-
-  #   #-----------------------------------------------
-  #   #-----------------------------------------------
-  #   text = "Extracting NAIP imagery by "+ surface + " mask."
-  #   generateMessage(text)
-  #   #-----------------------------------------------
-  #   this = ExtractByMask(naip_zone, mask)
-  #   this.save(naip_mask)
-  #   surface_raster_slide = Con(IsNull(Float(naip_mask)),-10000,Float(naip_mask))
-
-  #   #-----------------------------------------------
-  #   #-----------------------------------------------
-  #   text = "Segmenting NAIP imagery into "+ surface + " objects."
-  #   generateMessage(text)
-  #   #-----------------------------------------------
-
-  #   seg_naip = SegmentMeanShift(surface_raster_slide, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
-  #   seg_naip.save(sms_raster)
-  #   arcpy.RasterToPolygon_conversion(sms_raster, naip_fc, "NO_SIMPLIFY", "VALUE")
-
-  #   #-----------------------------------------------
-  #   #-----------------------------------------------
-  #   text = "Clipping "+ surface + " objects to mask."
-  #   generateMessage(text)
-  #   #-----------------------------------------------
-  #   arcpy.Clip_analysis(naip_fc, mask_poly, sms)
-
-  #   naip_lst.extend([sms])
-
-  # #-----------------------------------------------
-  # #-----------------------------------------------
-  # text = "Merging ground and nonground objects."
-  # generateMessage(text)
-  # #-----------------------------------------------
-
-  # #-----------------------------------------------
-  # #-----------------------------------------------
-  # # Merge surface layers
-  # #
-
-  # arcpy.Merge_management(naip_lst, sms_fc)
-  # arcpy.AddField_management(sms_fc, "JOIN", "INTEGER")
-  # rows = arcpy.UpdateCursor(sms_fc)
-  # i = 1
-  # for row in rows:
-  #   row.setValue("JOIN", i)
-  #   rows.updateRow(row)
-  #   i+= 1
-
-  # #-----------------------------------------------
-  # #-----------------------------------------------
-  # # Create Image Enhancements and join to objects
-  # #
-
-  # image_enhancements = ["ndvi", "ndwi", "gndvi", "osavi", "height"]
+  #Variables
+  ground_mask_poly = os.path.join(scratchgdb, "ground_mask_poly")
+  nonground_mask_poly = os.path.join(scratchgdb, "nonground_mask_poly")
+  ground_mask_raw = os.path.join(scratchgdb, "ground_mask_raw")
+  nonground_mask_raw = os.path.join(scratchgdb, "nonground_mask_raw")
+  ground_dissolve_output = os.path.join(scratchgdb, "ground_mask_dis")
+  nonground_dissolve_output = os.path.join(scratchgdb, "nonground_mask_dis")
+  ground_mask_raster = os.path.join(scratchgdb, "ground_mask_raster")
+  nonground_mask_raster = os.path.join(scratchgdb, "nonground_mask_raster")
+  nonground_mask_resample = os.path.join(scratchgdb, "nonground_mask_resample")
+  ground_mask_resample = os.path.join(scratchgdb, "ground_mask_resample")
 
 
-  # def normalize(index):
-  #     return (2 * (Float(index) - Float(index.minimum)) / (Float(index.maximum) - Float(index.minimum))) - 1
+  #Find minimum cell area
+  min_cell_area = int(float(str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", "")))**2)+1
+  where_clause = "Shape_Area > " + str(min_cell_area)
 
-  # def createImageEnhancements(x, join, cell_size, created_enhancements):
+  #Create masks for ground and nonground features according to ground_ht_threshold
+  ground_ht_threshold = 2 #ft
+
+  mask = SetNull(Int(heights_zone),Int(heights_zone),"VALUE > " + str(ground_ht_threshold))
+  arcpy.RasterToPolygon_conversion(mask, ground_mask_raw, "NO_SIMPLIFY", "VALUE", )
+  arcpy.Dissolve_management(ground_mask_raw, ground_dissolve_output)
+
+  #Find cell size of imagery
+  cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
+
+  arcpy.Erase_analysis(bnd, ground_dissolve_output, nonground_mask_raw)
+
+  arcpy.PolygonToRaster_conversion(nonground_mask_raw, "OBJECTID", nonground_mask_raster, "CELL_CENTER", "", cell_size)
+  arcpy.RasterToPolygon_conversion(nonground_mask_raster, nonground_mask_raw, "NO_SIMPLIFY", "VALUE")
+  where_clause = "Shape_Area > " + str(min_cell_area)
+  arcpy.Select_analysis(nonground_mask_raw, nonground_mask_poly, where_clause)
+
+  arcpy.Erase_analysis(bnd, nonground_mask_poly, ground_mask_poly)
+  arcpy.PolygonToRaster_conversion(ground_mask_poly, "OBJECTID", ground_mask_raster, "CELL_CENTER", "", cell_size)
+  arcpy.RasterToPolygon_conversion(ground_mask_raster, ground_mask_raw, "NO_SIMPLIFY", "VALUE")
+  arcpy.Select_analysis(ground_mask_raw, ground_mask_poly, where_clause)
+
+  arcpy.Erase_analysis(bnd, ground_mask_poly, nonground_mask_poly)
+
+  #-----------------------------------------------
+  #-----------------------------------------------
+  #Segment each surface separately using SMS
+  #
+
+  spectral_detail = 20
+  spatial_detail = 20
+  min_seg_size = 1
+
+  surfaces = ["ground", "nonground"]
+  naip_lst = []
+  ground_mask_poly = []
+
+  for surface in surfaces:
+
+  # Try running SMS on each surface
+    sms_raster = os.path.join(scratchgdb, surface+"_sms_raster")
+    naip_fc =  os.path.join(scratchgdb, surface + "_naip_fc")
+    mask_poly = os.path.join(scratchgdb, surface+ "_mask_poly")
+    mask = mask_poly
+    sms = os.path.join(scratchgdb, surface+"_sms")
+    naip_mask = os.path.join(scratchgdb,surface + "_naip")
+    mask_raw = os.path.join(scratchgdb, surface + "_mask_raw")
+    dissolve_output = os.path.join(scratchgdb, surface + "_mask_dis")
+
+    #-----------------------------------------------
+    #-----------------------------------------------
+    text = "Extracting NAIP imagery by "+ surface + " mask."
+    generateMessage(text)
+    #-----------------------------------------------
+    this = ExtractByMask(naip_zone, mask)
+    this.save(naip_mask)
+    surface_raster_slide = Con(IsNull(Float(naip_mask)),-10000,Float(naip_mask))
+
+    #-----------------------------------------------
+    #-----------------------------------------------
+    text = "Segmenting NAIP imagery into "+ surface + " objects."
+    generateMessage(text)
+    #-----------------------------------------------
+
+    seg_naip = SegmentMeanShift(surface_raster_slide, spectral_detail, spatial_detail, min_seg_size) #, band_inputs)
+    seg_naip.save(sms_raster)
+    arcpy.RasterToPolygon_conversion(sms_raster, naip_fc, "NO_SIMPLIFY", "VALUE")
+
+    #-----------------------------------------------
+    #-----------------------------------------------
+    text = "Clipping "+ surface + " objects to mask."
+    generateMessage(text)
+    #-----------------------------------------------
+    arcpy.Clip_analysis(naip_fc, mask_poly, sms)
+
+    naip_lst.extend([sms])
+
+  #-----------------------------------------------
+  #-----------------------------------------------
+  text = "Merging ground and nonground objects."
+  generateMessage(text)
+  #-----------------------------------------------
+
+  #-----------------------------------------------
+  #-----------------------------------------------
+  # Merge surface layers
+  #
+
+  arcpy.Merge_management(naip_lst, sms_fc)
+  arcpy.AddField_management(sms_fc, "JOIN", "INTEGER")
+  rows = arcpy.UpdateCursor(sms_fc)
+  i = 1
+  for row in rows:
+    row.setValue("JOIN", i)
+    rows.updateRow(row)
+    i+= 1
+
+  #-----------------------------------------------
+  #-----------------------------------------------
+  # Create Image Enhancements and join to objects
+  #
+
+  image_enhancements = ["ndvi", "ndwi", "gndvi", "osavi", "height"]
+
+
+  def normalize(index):
+      return (2 * (Float(index) - Float(index.minimum)) / (Float(index.maximum) - Float(index.minimum))) - 1
+
+  def createImageEnhancements(x, join, cell_size, created_enhancements):
 
      for field in image_enhancements:
        enhancement_path = os.path.join(scratchgdb, field+"_"+str(zone_num))
