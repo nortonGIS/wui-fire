@@ -23,6 +23,7 @@ coarsening_size = "5" #meters
 input_naip = "naip.tif"
 input_bnd = "kinder_bnd.shp"
 input_heights = "heights.tif"
+model = "13"
 
 #-----------------------------------------------
 #-----------------------------------------------
@@ -316,64 +317,64 @@ while zones:
 
   # def createImageEnhancements(x, join, cell_size, created_enhancements):
 
-  #   for field in image_enhancements:
-  #     enhancement_path = os.path.join(scratchgdb, field+"_"+str(zone_num))
-  #     outTable = os.path.join(scratchgdb, "zonal_"+field)
+     for field in image_enhancements:
+       enhancement_path = os.path.join(scratchgdb, field+"_"+str(zone_num))
+       outTable = os.path.join(scratchgdb, "zonal_"+field)
 
-  #     # -----------------------------------------------
-  #     # -----------------------------------------------
-  #     text = "Computing " + field + " at "+cell_size+"m."
-  #     generateMessage(text)
-  #     # -----------------------------------------------
+       # -----------------------------------------------
+       # -----------------------------------------------
+       text = "Computing " + field + " at "+cell_size+"m."
+       generateMessage(text)
+       # -----------------------------------------------
 
-  #     if field == "ndvi":
-  #       inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b1))) / ((Float(naip_zone_b4))+(Float(naip_zone_b1)))
-  #       inValueRaster.save(enhancement_path)
-  #       ie = enhancement_path
-  #     elif field == "ndwi":
-  #       inValueRaster = ((Float(naip_zone_b2))-(Float(naip_zone_b4))) / ((Float(naip_zone_b2))+(Float(naip_zone_b4)))
-  #       inValueRaster.save(enhancement_path)
-  #       ie = enhancement_path
-  #     elif field == "gndvi":
-  #       inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b2))) / ((Float(naip_zone_b4))+(Float(naip_zone_b2)))
-  #       inValueRaster.save(enhancement_path)
-  #       ie = enhancement_path
-  #     elif field == "osavi":
-  #       inValueRaster = normalize((1.5 * (Float(naip_zone_b4) - Float(naip_zone_b1))) / ((Float(naip_zone_b4)) + (Float(naip_zone_b1)) + 0.16))
-  #       inValueRaster.save(enhancement_path)
-  #       ie = enhancement_path
-  #     elif field == "height":
-  #       enhancement_path = heights_zone
+       if field == "ndvi":
+         inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b1))) / ((Float(naip_zone_b4))+(Float(naip_zone_b1)))
+         inValueRaster.save(enhancement_path)
+         ie = enhancement_path
+       elif field == "ndwi":
+         inValueRaster = ((Float(naip_zone_b2))-(Float(naip_zone_b4))) / ((Float(naip_zone_b2))+(Float(naip_zone_b4)))
+         inValueRaster.save(enhancement_path)
+         ie = enhancement_path
+       elif field == "gndvi":
+         inValueRaster = ((Float(naip_zone_b4))-(Float(naip_zone_b2))) / ((Float(naip_zone_b4))+(Float(naip_zone_b2)))
+         inValueRaster.save(enhancement_path)
+         ie = enhancement_path
+       elif field == "osavi":
+         inValueRaster = normalize((1.5 * (Float(naip_zone_b4) - Float(naip_zone_b1))) / ((Float(naip_zone_b4)) + (Float(naip_zone_b1)) + 0.16))
+         inValueRaster.save(enhancement_path)
+         ie = enhancement_path
+       elif field == "height":
+         enhancement_path = heights_zone
 
-  #     created_enhancements.append(enhancement_path)
-  #     if join == "yes":
+       created_enhancements.append(enhancement_path)
+       if join == "yes":
 
-  #       # -----------------------------------------------
-  #       # -----------------------------------------------
-  #       text = "Joining mean " + field + " to each object."
-  #       generateMessage(text)
-  #       # -----------------------------------------------
+         # -----------------------------------------------
+         # -----------------------------------------------
+         text = "Joining mean " + field + " to each object."
+         generateMessage(text)
+         # -----------------------------------------------
+         
+         z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", enhancement_path, outTable, "NODATA", "MEAN")
 
-  #       z_stat = ZonalStatisticsAsTable(sms_fc, "JOIN", enhancement_path, outTable, "NODATA", "MEAN")
+         arcpy.AddField_management(outTable, field, "FLOAT")
+         arcpy.CalculateField_management(outTable, field, "[MEAN]")
+         one_to_one_join(sms_fc, outTable, field, "FLOAT")
+     return created_enhancements
 
-  #       arcpy.AddField_management(outTable, field, "FLOAT")
-  #       arcpy.CalculateField_management(outTable, field, "[MEAN]")
-  #       one_to_one_join(sms_fc, outTable, field, "FLOAT")
-  #   return created_enhancements
+   created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
+   arcpy.DefineProjection_management(sms_fc, projection)
 
-  # created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
-  # arcpy.DefineProjection_management(sms_fc, projection)
-
-  # #-----------------------------------------------
-  # #-----------------------------------------------
-  # # Fuzzy rule classifier
-  # #
-  # #Primitive types = [vegetation, impervious, water, confusion]
-  # #Land cover types = [tree, shrub, grass, pavement, building, water]
-  # #
-  # # Stages:
-  # #   1. Classify object based on majority primitive type
-  # #   2. Classify each primitive object based on IE and height
+   #-----------------------------------------------
+   #-----------------------------------------------
+   # Fuzzy rule classifier
+   #
+   #Primitive types = [vegetation, impervious, water, confusion]
+   #Land cover types = [tree, shrub, grass, pavement, building, water]
+   #
+   # Stages:
+   #   1. Classify object based on majority primitive type
+   #   2. Classify each primitive object based on IE and height
 
   def classify(stage, landcover, field):
     if stage == "S1":
@@ -671,11 +672,11 @@ arcpy.Erase_analysis (sms_fc, veg_join, confused)
 band_lst = ["ndvi", "ndwi", "height"]
 
 composite = os.path.join(outputs, "composite.tif")
-#def createLayerComposite(bands):
-  # bands_5m = createImageEnhancements(bands, "no", "5", [])
-  # arcpy.CompositeBands_management(bands_5m, composite)
-  # arcpy.DefineProjection_management(composite, projection)
-#createLayerComposite(band_lst)
+def createLayerComposite(bands):
+   bands_5m = createImageEnhancements(bands, "no", "5", [])
+   arcpy.CompositeBands_management(bands_5m, composite)
+   arcpy.DefineProjection_management(composite, projection)
+createLayerComposite(band_lst)
 
 
 
@@ -684,8 +685,8 @@ composite = os.path.join(outputs, "composite.tif")
 text = "Preparing training samples for SVM."
 generateMessage(text)
 #-----------------------------------------------
-svm_training = os.path.join(scratchgdb, "svm_training")
-arcpy.FeatureClassToFeatureClass_conversion (training_samples, scratchgdb, "svm_training")
+svm_training = os.path.join(outputs, "svm_training.shp")
+arcpy.FeatureClassToFeatureClass_conversion (training_samples, outputs, "svm_training")
 training_fields = [["Classname", "TEXT"], ["Classvalue", "LONG"], ["RED", "LONG"], ["GREEN", "LONG"], ["BLUE", "LONG"], ["Count", "LONG"]]
 for field in training_fields:
   field_name = field[0]
@@ -693,13 +694,14 @@ for field in training_fields:
   arcpy.AddField_management(svm_training, field_name, field_type)
 
 arcpy.AddField_management(svm_training, "JOIN", "INTEGER")
-arcpy.CalculateField_management(svm_training, "JOIN", "[OBJECTID]")
+arcpy.CalculateField_management(svm_training, "JOIN", "[FID]")
 
 zonal_training = os.path.join(scratchgdb, "zonal_train")
 
 z_stat = ZonalStatisticsAsTable(svm_training, "JOIN", composite, zonal_training, "NODATA", "ALL")
 one_to_one_join(svm_training, zonal_training, "JOIN", "INTEGER")
-
+#
+#search cursor
 arcpy.CalculateField_management(svm_training, "Classname", "[S2]")
 arcpy.CalculateField_management(svm_training, "Classvalue", "[JOIN]")
 arcpy.CalculateField_management(svm_training, "RED", 1)
@@ -707,12 +709,11 @@ arcpy.CalculateField_management(svm_training, "GREEN", 1)
 arcpy.CalculateField_management(svm_training, "BLUE", 1)
 arcpy.CalculateField_management(svm_training, "Count", "[COUNT]")
 
-fields = arcpy.ListFields(svm_training)
+fields = [f.name for f in arcpy.ListFields(svm_training)]
 delete_fields = []
 for field in fields:
-  if field not in ["FID", "Shape", "Classname", "Classvalue", "RED", "GREEN", "BLUE", "Count"]:
+  if field not in ["FID", "Shape", "Shape_Area", "Shape_Length", "Classname", "Classvalue", "RED", "GREEN", "BLUE", "Count"]:
     delete_fields.append(field)
-    arcpy.AddMessage(field)
 arcpy.DeleteField_management(svm_training, delete_fields)
 
 
@@ -744,7 +745,7 @@ text = "Joining SVM classified outputs to 'Confused' objects."
 generateMessage(text)
 #-----------------------------------------------
 zonal_svm = os.path.join(scratchgdb, "zonal_svm")
-arcpy.ZonalStatisticsAsTable(confused, "JOIN", svm, zonal_svm, "NODATA", "MAJORITY")
+z_stat = ZonalStatisticsAsTable(confused, "JOIN", svm, zonal_svm, "NODATA", "MAJORITY")
 one_to_one_join(confused, zonal_svm, "JOIN", "LONG")
 
 classified = os.path.join(outputs, "classified.shp")
@@ -804,13 +805,13 @@ def classify(model, x):
 land_cover = classified
 land_cover_fields = [["fuel", "S2"], ["canopy", "S2"], ["stand", "height"]]
 for field in land_cover_fields:
-input_field = field[1]
-output_field = field[0]
-arcpy.AddField_management(land_cover, output_field, "INTEGER")
-fxn = "classify(!"+input_field+"!)"
-label_class = classify(model, output_field)
-arcpy.CalculateField_management(landscape, output_field, fxn, "PYTHON_9.3", label_class)
-arcpy.AddMessage("{0} created.".format(output_field))
+  input_field = field[1]
+  output_field = field[0]
+  arcpy.AddField_management(land_cover, output_field, "INTEGER")
+  fxn = "classify(!"+input_field+"!)"
+  label_class = classify(model, output_field)
+  arcpy.CalculateField_management(land_cover, output_field, fxn, "PYTHON_9.3", label_class)
+  arcpy.AddMessage("{0} created.".format(output_field))
 
 #-----------------------------------------------
 #-----------------------------------------------
@@ -831,7 +832,7 @@ def convertToAscii(x, y):
     where_clause = layer +" <> 9999"
     temp = os.path.join(scratchgdb, "t_"+layer)
     temp_raster = os.path.join(scratchgdb, "t_"+layer+"_r")
-    arcpy.Select_analysis(landscape, temp, where_clause)
+    arcpy.Select_analysis(land_cover, temp, where_clause)
     arcpy.PolygonToRaster_conversion(temp, layer, temp_raster, "CELL_CENTER", "", dem)
     arcpy.DefineProjection_management(temp_raster,projection)
     final = os.path.join(scratchgdb, layer)
@@ -861,7 +862,7 @@ def convertToAscii(x, y):
     arcpy.AddMessage("The {0} file was created.".format(layer))
 
   arcpy.AddMessage("{0} is finished.".format(y))
-convertToAscii(landscape, mitigation_type)
+convertToAscii(land_cover, mitigation_type)
 arcpy.AddMessage("All ascii are created.")
 
 #-----------------------------------------------
