@@ -323,7 +323,7 @@ while zones:
 
        # -----------------------------------------------
        # -----------------------------------------------
-       text = "Computing " + field + " at "+cell_size+"m."
+       text = "Computing " + field + " at "+coarsening_size+"m."
        generateMessage(text)
        # -----------------------------------------------
 
@@ -362,19 +362,19 @@ while zones:
          one_to_one_join(sms_fc, outTable, field, "FLOAT")
      return created_enhancements
 
-   created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
-   arcpy.DefineProjection_management(sms_fc, projection)
+  created_enhancements_1m = createImageEnhancements(image_enhancements, "yes", "1", [])
+  arcpy.DefineProjection_management(sms_fc, projection)
 
-   #-----------------------------------------------
-   #-----------------------------------------------
-   # Fuzzy rule classifier
-   #
-   #Primitive types = [vegetation, impervious, water, confusion]
-   #Land cover types = [tree, shrub, grass, pavement, building, water]
-   #
-   # Stages:
-   #   1. Classify object based on majority primitive type
-   #   2. Classify each primitive object based on IE and height
+  #-----------------------------------------------
+  #-----------------------------------------------
+  # Fuzzy rule classifier
+  #
+  #Primitive types = [vegetation, impervious, water, confusion]
+  #Land cover types = [tree, shrub, grass, pavement, building, water]
+  #
+  # Stages:
+  #   1. Classify object based on majority primitive type
+  #   2. Classify each primitive object based on IE and height
 
   def classify(stage, landcover, field):
     if stage == "S1":
@@ -553,6 +553,7 @@ while zones:
                   "    return \"confusion\""
                   )
 
+    
   def createClassMembership(stage, landcover, field, field_lst, output):
     if field in stages:
       field_lst = field_lst[:-2]
@@ -667,7 +668,10 @@ else:
   veg_join = vegetation#lst_merge[0]
 arcpy.Dissolve_management(veg_join, training_samples, ["S2"])
 
-arcpy.Erase_analysis (sms_fc, veg_join, confused)
+merged = os.path.join(scratchgdb, "merged_imp_veg")
+arcpy.Merge_management([vegetation, impervious], merged)                      
+arcpy.Erase_analysis (sms_fc, merged, confused)
+arcpy.AddField_management(confused, "S2", "TEXT")
 
 band_lst = ["ndvi", "ndwi", "height"]
 
@@ -698,8 +702,9 @@ arcpy.CalculateField_management(svm_training, "JOIN", "[FID]")
 
 zonal_training = os.path.join(scratchgdb, "zonal_train")
 
-z_stat = ZonalStatisticsAsTable(svm_training, "JOIN", composite, zonal_training, "NODATA", "ALL")
-one_to_one_join(svm_training, zonal_training, "JOIN", "INTEGER")
+z_stat = ZonalStatisticsAsTable(svm_training, "JOIN", composite, zonal_training, "NODATA", "ALL")                      
+arcpy.AddField_management(svm_training, "COUNT", "LONG")                      
+one_to_one_join(svm_training, zonal_training, "COUNT", "INTEGER")
 #
 #search cursor
 arcpy.CalculateField_management(svm_training, "Classname", "[S2]")
@@ -707,7 +712,7 @@ arcpy.CalculateField_management(svm_training, "Classvalue", "[JOIN]")
 arcpy.CalculateField_management(svm_training, "RED", 1)
 arcpy.CalculateField_management(svm_training, "GREEN", 1)
 arcpy.CalculateField_management(svm_training, "BLUE", 1)
-arcpy.CalculateField_management(svm_training, "Count", "[COUNT]")
+arcpy.CalculateField_management(svm_training, "COUNT", "[COUNT]")
 
 fields = [f.name for f in arcpy.ListFields(svm_training)]
 delete_fields = []
@@ -746,7 +751,28 @@ generateMessage(text)
 #-----------------------------------------------
 zonal_svm = os.path.join(scratchgdb, "zonal_svm")
 z_stat = ZonalStatisticsAsTable(confused, "JOIN", svm, zonal_svm, "NODATA", "MAJORITY")
-one_to_one_join(confused, zonal_svm, "JOIN", "LONG")
+arcpy.AddField_management(confused, "MAJORITY", "LONG")
+one_to_one_join(confused, zonal_svm, "MAJORITY", "LONG")
+stage = "S2"
+landcover = "confused"
+field = "MAJORITY"
+def classify_confusion(x):
+  grass = "x == 0"
+  shrub = "x == 1"
+  tree = " x== 2"
+  return("def landcover(x):\\n"+
+                 "  if "+grass+":\\n"+
+                 "    return \"grass\"\\n"+
+                 "  elif "+shrub+":\\n"+
+                 "    return \"shrub\"\\n"+
+                 "  elif "+tree+":\\n"+
+                 "    return \"tree\""
+                 )
+
+field = "MAJORITY"
+fxn = "landcover(!"+field+"!)"
+label_class = classify_confusion(field)
+arcpy.CalculateField_management(confused, "S2", fxn, "PYTHON_9.3", label_class)
 
 classified = os.path.join(outputs, "classified.shp")
 arcpy.Merge_management([confused, vegetation, impervious], classified)
@@ -765,7 +791,7 @@ def classify(model, x):
     shrub = "6"
     grass = "1"
     water = "98"
-    pavement = "99"
+    path = "99"
   elif model != "13":
     #-----------------------------------------------
     #-----------------------------------------------
@@ -777,8 +803,8 @@ def classify(model, x):
     return ("def classify(x):\\n"+
             "  if x == \"building\":\\n"+
             "    return "+building+"\\n"+
-            "  elif x == \"P\": \\n"+
-            "    return "+pavement+"\\n"+
+            "  elif x == \"path\": \\n"+
+            "    return "+path+"\\n"+
             "  elif x == \"water\":\\n"+
             "    return "+water+"\\n"+
             "  elif x == \"grass\":\\n"+
