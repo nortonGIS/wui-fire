@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20170916</CreaDate><CreaTime>11523500</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files (x86)\arcgis\desktop10.4\ArcToolbox\Toolboxes\Conversion Tools.tbx\RasterToASCII" Date="20170916" Time="115235">RasterToASCII K:\TFS_Fire\Data\03_DutchFlat\genFuel\Scratch\Scratch.gdb\t_slope_r K:\TFS_Fire\Data\03_DutchFlat\genFuel\Outputs\slope.asc</Process></lineage></DataProperties></Esri></metadata>
