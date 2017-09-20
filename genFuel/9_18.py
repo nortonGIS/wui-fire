@@ -24,6 +24,7 @@
 #-------------------------------------------------------------------------------
 # USER INPUT PARAMETERS
 location_name = "Tahoe_West"
+bioregion = "Tahoe" #[Tahoe]
 projection = "UTMZ10"  #["UTMZ10", "UTMZ11", "SPIII", "SPIV"]
 coarsening_size = "5" # in meters
 input_bnd = "bnd.shp"
@@ -52,6 +53,7 @@ from arcpy import env
 from arcpy.sa import *
 arcpy.env.overwriteOutput = True
 from tableJoin import one_to_one_join
+from thresholdsLib import get_thresholds
 from random import randint
 
 #-----------------------------------------------
@@ -121,7 +123,6 @@ elif projection == "SPIV":
   scale_naip = 3.28084
   unit = "Feet"
   projection = "PROJCS['NAD_1983_StatePlane_California_VI_FIPS_0406_Feet',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Lambert_Conformal_Conic'],PARAMETER['False_Easting',6561666.666666666],PARAMETER['False_Northing',1640416.666666667],PARAMETER['Central_Meridian',-116.25],PARAMETER['Standard_Parallel_1',32.78333333333333],PARAMETER['Standard_Parallel_2',33.88333333333333],PARAMETER['Latitude_Of_Origin',32.16666666666666],UNIT['Foot_US',0.3048006096012192]]"
-
 #-----------------------------------------------
 #-----------------------------------------------
 
@@ -234,6 +235,8 @@ while zones:
   naip_sms = os.path.join(scratchgdb, "naip_sms_"+str(zone_num))
   sms_fc = os.path.join(scratchgdb, "sms_fc_"+str(zone_num))
   lst_merge = []
+  veg_lst = []
+  imp_lst = []
 
   # Create zone boundary and extract NAIP and heights
   arcpy.Select_analysis(bnd_zones, bnd, where_clause)   
@@ -440,11 +443,9 @@ while zones:
   def classify(stage, landcover, field):
     if stage == "S1":
       if field == "S1_grid":
-        #-----------------------------------------------
-        # Thresholds
-        healthy = ">= 250" #[250,255]
-        dry = "<= 249"  #[0, 249]
-        #-----------------------------------------------
+        threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+        healthy = threshold[0]
+        dry = threshold[1]
         return("def landcover(x):\\n"+
                "  if x "+healthy+":\\n"+
                "    return \"healthy\"\\n"+
@@ -454,11 +455,9 @@ while zones:
                )
     
       elif field == "S1_ndvi":
-        #-----------------------------------------------
-        # Thresholds
-        imp = "-0.88 <= x <= -0.12" #[-0.88, -0.12]
-        veg = "-0.01 <= x <= 0.6"  #[-0.01, 0.6]
-        #-----------------------------------------------
+        threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+        imp = threshold[0]
+        veg = threshold[1]
         return ("def landcover(x):\\n"+
                "  membership = \"\"\\n"+
                "  if "+imp+":\\n"+
@@ -469,11 +468,9 @@ while zones:
                )
 
       elif field == "S1_ndwi":
-        #-----------------------------------------------
-        # Thresholds
-        imp = "-0.02 <= x <= 0.91"  #[-0.02, 0.91]
-        veg = "-0.46 <= x <= -0.03" #[-0.46, -0.03]
-        #-----------------------------------------------
+        threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+        imp = threshold[0]
+        veg = threshold[1]
         return ("def landcover(x):\\n"+
                "  membership = \"\"\\n"+
                "  if "+imp+":\\n"+
@@ -484,11 +481,9 @@ while zones:
                )
       
       elif field == "S1_gndv":
-        #-----------------------------------------------
-        # Thresholds
-        imp = "-0.94<= x <= -0.05"  #[-0.94, -0.05]
-        veg = "-0.02 <= x <= 0.38" #[-0.02, 0.38]
-        #-----------------------------------------------
+        threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+        imp = threshold[0]
+        veg = threshold[1]
         return ("def landcover(x):\\n"+
                "  membership = \"\"\\n"+
                "  if "+imp+":\\n"+
@@ -499,12 +494,9 @@ while zones:
                )
 
       elif field == "S1_osav":
-        #-----------------------------------------------
-        #-----------------------------------------------
-        # Thresholds
-        imp = "-0.94 <= x <= -0.13"  #[-0.94, -0.13]
-        veg = "-0.08 <= x <= 0.76" #[-0.08, 0.76]
-        #-----------------------------------------------
+        threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+        imp = threshold[0]
+        veg = threshold[1]
         return ("def landcover(x):\\n"+
                "  membership = \"\"\\n"+
                "  if "+imp+":\\n"+
@@ -534,76 +526,52 @@ while zones:
     elif stage == "S2":
       if landcover == "vegetation":
         if field == "S2_grid":
-          #-----------------------------------------------
-          #-----------------------------------------------
-          # Thresholds
-          dry = ">= 250"    #[250, 255]
-          healthy = "<= 249"    #(0, 249]
-          #con = ""
-          #-----------------------------------------------
+          threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+          dry = threshold[0]
+          healthy = threshold[1]
           return("def landcover(x):\\n"+
                  "  if x "+dry+":\\n"+
                  "    return \"dry\"\\n"+
-                 "  elif x "+shr+":\\n"+
+                 "  elif x "+healthy+":\\n"+
                  "    return \"healthy\"\\n"+
                  "  else:\\n"+
                  "    return \"confusion\""
                  )
                 
         elif field == "S2_heig":
-          #-----------------------------------------------
-          # Thresholds
-          gra = "x <= "+str(ground_ht_threshold)
-          shr = "x <= "+str(3*ground_ht_threshold)
-          #tre = ""
-          #-----------------------------------------------
+          threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+          grass = threshold[0]
+          shrub = threshold[1]
+          tree = threshold[2]
           return("def landcover(x):\\n"+
-                 "  if "+gra+":\\n"+
+                 "  if "+grass+":\\n"+
                  "    return \"grass\"\\n"+
-                 "  elif "+shr+":\\n"+
+                 "  elif "+shrub+":\\n"+
                  "    return \"shrub\"\\n"+
-                 "  else:\\n"+
+                 "  elif "+tree+":\\n"+
                  "    return \"tree\""
                  )
       
         elif field == "S2":
-          return("def landcover(a, b):\\n"+
-                 "  if b != \"confusion\":\\n"+
-                 "    return a "
+          return("def landcover(x):\\n"+
+                 "  return x\\n"
                  )
 
       elif landcover == "impervious":
-        
         if field == "S2_heig":
-          #-----------------------------------------------
-          # Thresholds
-          pat = "x <= "+str(ground_ht_threshold)
-          #bui = ""
-          #-----------------------------------------------
+          threshold = get_thresholds(bioregion, stage, landcover, field, unit)
+          path = threshold[0]
+          building = threshold[1]
           return("def landcover(x):\\n"+
-                 "  if "+pat+":\\n"+
+                 "  if "+path+":\\n"+
                  "    return \"path\"\\n"+
-                 "  else:\\n"+
+                 "  elif "+building+":\\n"+
                  "    return \"building\""
                  )
-      
-        elif field == "S2_ndwi":
-          #-----------------------------------------------
-          # Thresholds
-          imp = "0 <= x <= 0.91" #[0.1, 0.91]
-          #-----------------------------------------------
-          return ("def landcover(x):\\n"+
-                  "  if "+imp+":\\n"+
-                  "    return \"I\"\\n"+
-                  "  return \"confusion\""
-                  )
 
         elif field == "S2":
-          return ("def landcover(a, b):\\n"+
-                  "  if b == \"I\":\\n"+
-                  "    return a\\n"+
-                  "  else:\\n"+
-                  "    return \"confusion\""
+          return ("def landcover(x):\\n"+
+                  "  return x\\n"
                   )
 
   # Assigns classess
@@ -627,10 +595,8 @@ while zones:
 
   #-----------------------------------------------
   #-----------------------------------------------
-  # Classifier methods
-  #
   
-  # Structure for stages
+  # Classifier methods
   stages = ["S1","S2"]
   class_structure = [
                      ["vegetation",
@@ -641,7 +607,7 @@ while zones:
 
   # Indices used for each stage of classification
   s1_indices = ["ndvi", "ndwi", "gndvi", "osavi"]#, "gridcode"]
-  s2_indices = ["height", "ndwi"]#, "gridcode"]
+  s2_indices = ["height"]#, "gridcode"]
 
   for stage in stages:
     text = "Executing Stage "+str(stage)+" classification."
@@ -667,7 +633,9 @@ while zones:
               where_clause = field + " = '" + primitive[0] + "'"
               arcpy.Select_analysis(sms_fc, output, where_clause)
               if primitive == "vegetation":
-                lst_merge.append(output)
+                veg_lst.append(output)
+              else:
+                imp_lst.append(output)
               
         # Assign partial membership     
         else:
@@ -714,8 +682,8 @@ generateMessage(text)
 confused = os.path.join(outputs, "confused.shp")
 veg_join = os.path.join(scratchgdb, "veg_join")
 training_samples = os.path.join(outputs, "training_fc.shp")
-vegetation = os.path.join(outputs, "vegetation_0.shp")
-impervious = os.path.join(outputs, "impervious_0.shp")
+#vetation = os.path.join(outputs, "vegetation_0.shp")
+#impervious = os.path.join(outputs, "impervious_0.shp")
 merged = os.path.join(scratchgdb, "merged_imp_veg")
 composite = os.path.join(outputs, "composite.tif")
 
@@ -725,7 +693,9 @@ if len(lst_merge) > 1:
 else:
   veg_join = vegetation#lst_merge[0]
 arcpy.Dissolve_management(veg_join, training_samples, ["S2"])
-arcpy.Merge_management([vegetation, impervious], merged) 
+
+# Code note: make sure veg_lst is merged
+arcpy.Merge_management(veg_lst + imp_lst, merged) 
 
 # Create dataset with only confused objects                     
 arcpy.Erase_analysis (sms_fc, merged, confused)
@@ -984,6 +954,100 @@ generateMessage(text)
 text = "Next step: Manually create LCP file."
 generateMessage(text)
 #-----------------------------------------------
+#-----------------------------------------------
+
+landscape_file = os.path.join(outputs, "landscape.lcp")
+
+#-----------------------------------------------
+#-----------------------------------------------
+
+# Burn in FlamMap
+#
+#flamMap = os.path.join(toolpath, "FlamMap")
+#FM_dll = os.path.join(flamMap, "FlamMapF.dll")
+#dll = ctypes.cdll.LoadLibrary(FM_dll) #Need to change to FlamMap folder
+#fm = getattr(dll, "?Run@@YAHPBD000NN000HHN@Z")
+#fm.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_double, ctypes.c_double, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_double]
+#fm.restype = ctypes.c_int
+
+#Landscape = landscape_file
+#FuelMoist = "claremont.fms"
+#OutputFile = "Burn"
+#FuelModel = "-1"
+#Windspeed = 20.0  # mph
+#WindDir = 0.0   # Direction angle in degrees
+#Weather = "-1"
+#WindFileName = "-1"
+#DateFileName = "-1"
+#FoliarMoist = 100 # 50%
+#CalcMeth = 0    # 0 = Finney 1998, 1 = Scott & Reinhardt 2001
+#Res = -1.0
+
+#e = fm(Landscape, FuelMoist, OutputFile, FuelModel, Windspeed, WindDir, Weather, WindFileName, DateFileName, FoliarMoist, CalcMeth, Res)
+#if e > 0:
+#    arcpy.AddError("Problem with parameter {0}".format(e))
+
+#burn_metrics = ["fire_line_intensity", "flame_length", "rate_of_spread"]
+
+#for root, dirs, fm_outputs in os.walk(outputs): #Check to confirm outputs are saved here
+#    for flamMap_output in fm_outputs:
+#        if flamMap_output[:-3].lower() in burn_metrics:
+#            metric = flamMap_output[-4:].lower()
+#            burn_ascii = os.path.join(scratchgdb, metric+".asc")
+            # burn_ras = os.path.join(scratchgdb, metric+".tif")
+            # outTable = os.path.join(scratchgdb, "zonal_"+metric)
+            
+            # os.rename(flamMap_output, burn_ascii)
+
+# #-----------------------------------------------
+# #-----------------------------------------------
+# # Set Cell Size
+# arcpy.env.snapRaster = naip
+# cell_size = str(arcpy.GetRasterProperties_management(naip, "CELLSIZEX", ""))
+# naip_cell_size = cell_size +" " +cell_size
+# #-----------------------------------------------
+# #-----------------------------------------------
+
+# for metric in burn_metrics:
+
+#   #-----------------------------------------------
+#   #-----------------------------------------------
+#   text = "Calculating and joining max " + metric + " to each object."
+#   generateMessage(text)
+#   #-----------------------------------------------
+#   #Set variables
+#   in_ascii_file = os.path.join(inputs, metric + ".asc")
+#   burn = os.path.join(scratchgdb, metric)
+#   raw_raster = os.path.join(outputs, metric  + "_raw.tif")
+#   shift = os.path.join(outputs, metric+".tif")
+#   outTable = os.path.join(scratchgdb, "zonal_"+metric)
+  
+#   #-----------------------------------------------
+#   #-----------------------------------------------
+#   # Convert ascii output to raster and align cells
+#   arcpy.ASCIIToRaster_conversion(in_ascii_file, raw_raster, "INTEGER")
+#   arcpy.DefineProjection_management(raw_raster, projection)
+#   arcpy.Resample_management(raw_raster, "INTEGER", naip_cell_size, "")
+#   arcpy.Shift_management(burn, shift, -(int(cell_size)), 0, naip)
+#   #-----------------------------------------------
+#   #-----------------------------------------------
+  
+#   #-----------------------------------------------
+#   #-----------------------------------------------
+#   # Calculate zonal max and join to each object
+#   arcpy.CalculateField_management(risk_fc, "JOIN", "[FID]")
+#   z_table = ZonalStatisticsAsTable(risk_fc, "JOIN", shift, outTable, "NODATA", "MAXIMUM")
+#   if metric == "fire_line_intensity":
+#     metric = "fli"
+#   elif metric == "rate_of_spread":
+#     metric = "ros"
+#   elif metric == "flame_length":
+#     metric = "fl"
+#   arcpy.AddField_management(outTable, metric, "INTEGER")
+#   arcpy.CalculateField_management(outTable, metric, "int([MAX])")
+#   one_to_one_join(risk_fc, outTable, metric, "INTEGER")
+#   #-----------------------------------------------
+#   #-----------------------------------------------
 
 
 #-----------------------------------------------
