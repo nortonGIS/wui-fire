@@ -1,0 +1,2 @@
+Canopy Base height = 3 meters
+Canopy Bulk Density = 0.1 kg/m^3
