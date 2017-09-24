@@ -27,7 +27,7 @@
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 # USER LOG
-date = "9_22"
+date = "9_23"
 # Summary
 #
 #
@@ -40,7 +40,7 @@ projection = "UTMZ10"  #["UTMZ10", "UTMZ11", "SPIII", "SPIV"]
 
 # Settings
 coarsening_size = "5" #meters
-tile_size = "2" #square miles
+tile_size = "1" #square miles
 model = "13"  # Fuel Model set
 pipe_analysis = "no"  # Assess infrastructure
 buff_distance = "1000 feet" # Buffer around infrastructure
@@ -85,47 +85,78 @@ script_db = "K:\\TFS_Fire\\Tools"
 #-----------------------------------------------
 # File Structure
 folder_structure = [
+  "Scripts",
   "Inputs",
-  "Outputs"
+  "Outputs",
   "Scratch"
-  "Scripts"
 ]
 
 # Dependent scripts
-dependet_scripts = [
-  "thresholdsLib",
-  "tableJoin"
+dependent_scripts = [
+  "thresholdsLib.py",
+  "tableJoin.py"
 ]
 
 # Dependent dlls 
 dependent_dlls = [
-  "GenLCPv2.dll"
+  "GenLCPv2.dll",
   "FlamMapF.dll"
 ]
 # Create new project folder and set environment
 scriptpath = sys.path[0] # Find script
 toolpath = os.path.dirname(scriptpath)  # Find parent directory
-
-if toolpath[-4] != date:
-  current_project = os.path.join(toolpath,date)
-  if not os.path.exists(current_project): # If new project
+current_project = os.path.join(toolpath)
+if os.path.basename(toolpath) == date:
+  arcpy.AddMessage("File structure is setup.")
+elif os.path.basename(scriptpath) != date:
+    if os.path.basename(scriptpath) == "Scripts":
+      new_toolpath = os.path.dirname(toolpath)
+      current_project = os.path.join(new_toolpath,date)
+    else:
+      current_project = os.path.join(toolpath,date)
     os.makedirs(current_project)        # Make new project folder
     for folder_name in folder_structure:
       folder = os.path.join(current_project, folder_name)
       os.makedirs(folder)
       if folder_name == "Inputs":
-        for file in os.listdir(toolpath):
-          if file[-3:] != ".py":
-              shutil.copy2(os.path.join(toolpath,file), os.path.join(folder_name, file)) # copies main to script folder
+        if os.path.basename(scriptpath) == "Scripts":
+          input_path = os.path.join(toolpath, "Inputs")
+          for root, dirs, inputs in os.walk(scriptpath):
+            for input_file in inputs:
+              script_folder = os.path.join(current_project, "Scripts")
+              base=os.path.basename(input_file)
+              extension = os.path.splitext(input_file)[1]
+              if extension == ".py":
+                arcpy.Copy_management(input_file, os.path.join(script_folder, date)) # copies main to script folde
+              else:
+                arcpy.Copy_management(input_file, os.path.join(script_folder, base))
+        else:
+          input_path = scriptpath
+        for root, dirs, inputs in os.walk(input_path):
+          for input_file in inputs:
+            base=os.path.basename(input_file)
+            extension = os.path.splitext(input_file)[1]
+            
+            if extension not in [".py", ".tbx"]:
+                              
+              input_folder = os.path.join(current_project, folder_name)
+              arcpy.Copy_management(os.path.join(input_path,input_file), os.path.join(input_folder, base)) # copies main to script folder
+            else:
+              input_folder = os.path.join(current_project, "Scripts")
+              if extension == ".py":
+                arcpy.Copy_management(input_file, os.path.join(input_folder, date)) # copies main to script folde
+              else:
+                arcpy.Copy_management(input_file, os.path.join(input_folder, base)) # copies main to script folde
       elif folder_name == "Scratch":
         arcpy.CreateFileGDB_management(folder, "Scratch.gdb")
-      elif folder_name = "Scripts":
-        shutil.copy2(os.path.join(toolpath, date+".py"), os.path.join(dll_path, date+".py")) # copies main to script folder
-        for dependent_script in dependet_scripts:
-          shutil.copy2(os.path.join(script_db, dependent_script), os.path.join(dll_path, dependent_script)) # copies main to script folder 
-        for dependent_dll in dependet_dlls:
-          shutil.copy2(os.path.join(script_db, dependent_dll), os.path.join(dll_path, dependent_dll)) # copies main to script folder 
-  os.remove(scriptpath)
+      elif folder_name == "Scripts":
+        input_folder = os.path.join(current_project, folder_name)
+              
+        for dependent_script in dependent_scripts:
+          shutil.copy2(os.path.join(script_db, dependent_script), os.path.join(input_folder, dependent_script)) # copies main to script folder 
+        for dependent_dll in dependent_dlls:
+          shutil.copy2(os.path.join(script_db, dependent_dll), os.path.join(input_folder, dependent_dll)) # copies main to script folder 
+  #os.remove(scriptpath)
 
 # Dependent scripts
 from tableJoin import one_to_one_join
@@ -137,7 +168,6 @@ outputs = os.path.join(current_project, "Outputs")
 scratchws = os.path.join(current_project, "Scratch") 
 scratchgdb = os.path.join(scratchws, "Scratch.gdb")   
 dll_path = os.path.join(current_project, "Scripts")
-
 
 #-----------------------------------------------
 #-----------------------------------------------
@@ -161,7 +191,7 @@ bnd_zones = os.path.join(inputs, input_bnd) # Bounding box for each tile
 
 # Outputs
 classified = os.path.join(outputs, "classified.shp")
-analysis_area = bnd_zones_rast  # analysis area/ area of interest
+analysis_area = bnd_zones  # analysis area/ area of interest
 dem = os.path.join(outputs, "dem.tif")  # Resampled DEM in native units 
 heights = os.path.join(outputs, "heights.tif")  # Resampled heights in native units
 scaled_heights = os.path.join(outputs, "scaled_heights.tif")  # Heights in project units
@@ -248,34 +278,34 @@ arcpy.DefineProjection_management(naip, projection)
 bands = ["Band_1","Band_2","Band_3","Band_4"] # NAIP has 4 bands (in increasing order) B,G,R,NIR
 
 # Create a fitted, resampled boundary
-#If boundary is not provided
-if not os.path.exists(bnd_zones):
- this = Int(Raster(naip)*0)+1  
- this.save(bnd_zones_rast)
- arcpy.RasterToPolygon_conversion(bnd_zones_rast, bnd_zones, "NO_SIMPLIFY")
+this = Int(Raster(naip)*0)  
+this.save(bnd_zones_rast)
+arcpy.DefineProjection_management(bnd_zones_rast, projection)
+arcpy.RasterToPolygon_conversion(bnd_zones_rast, bnd_zones, "NO_SIMPLIFY", "Value")
+  
 
-#If boundary is provided
-else:
- arcpy.PolygonToRaster_conversion (bnd_zones, "FID", bnd_zones_rast, "", "", coarsening_size)
- this = Int(Raster(bnd_zones_rast)*0)+1  
- this.save(bnd_zones_rast)
- arcpy.RasterToPolygon_conversion(bnd_zones_rast, bnd_zones, "NO_SIMPLIFY")
 
 ## Segment bnd zones into fishnet according to maximum tile size
 arcpy.AddField_management(bnd_zones, "Shape_area", "DOUBLE")
-exp = "!SHAPE.AREA@SQUAREMILES!"
+exp = "!SHAPE.AREA@SQUAREMETERS!"
 arcpy.CalculateField_management(bnd_zones, "Shape_area", exp, "PYTHON_9.3")
 searchcursor = arcpy.SearchCursor(bnd_zones)
 area = searchcursor.next()
-naip_area = zones.getValue("Shape_area")
-if naip_area > int(tile_size):
- number of pixels = naip_area * Float(1609.34/5)
- extent = bnd_zones.extent
+naip_area = area.getValue("Shape_area")
+if naip_area > (int(tile_size)*1609):
+ #number_of_pixels = naip_area * Float(1609.34/5)
+ desc = arcpy.Describe(bnd_zones)
+ extent = desc.extent
  X_axis = extent.XMax - extent.XMin
  Y_axis = extent.YMax - extent.YMin
- num_rows = Int(Y_axis/3218.69)
- num_columns = Int(X_axis/3218.69)
- arcpy.CreateFishnet_management (bnd_zones, "1 1", "1 9", "3218", "3218", num_rows, num_columns, str(extent.XMin)+" "+str(extent.YMin), "", "", "POLYGON")
+ num_rows = Int(Y_axis/(int(tile_size)*1609))
+ num_columns = Int(X_axis/(int(tile_size)*1609))
+
+ text = "Creating tiles."
+ generateMessage(text)
+ arcpy.AddMessage(str(extent.XMin)+" "+str(extent.YMin))
+ #arcpy.CreateFishnet_management(bnd_zones, str(extent.XMin)+" "+str(extent.YMin), str(extent.YMax), "", "", num_rows, num_columns, str(extent.XMax)+" "+str(extent.YMax), "", "", "POLYGON")
+ #arcpy.DefineProjection_management(bnd_zones, projection)
  #-----------------------------------------------
  #-----------------------------------------------
  
@@ -285,11 +315,11 @@ if naip_area > int(tile_size):
  generateMessage(text)
 
  # Print tiling structure on screen
- cell_rows = []
+ cell_rows = ""
  cell_columuns = []
- for i in leng(num_rows):
-   cell_rows.append("[-]")
- for i in len(num_col):
+ for i in range(num_rows):
+   cell_rows += "[-]"
+ for i in range(num_columns):
    arcpy.AddMessage(cell_rows)
  #-----------------------------------------------
  #-----------------------------------------------
@@ -304,10 +334,10 @@ factor = float(cell_size)/float(scale_naip) # scale naiip
 arcpy.Resample_management(raw_heights, resample_heights, str(scale_naip) + " " + str(scale_naip), "BILINEAR") # Bilinear Interpolation reduce image distortion when scaling.It linearly interpolates the nearest 4 pixels
 this = Aggregate(resample_heights, factor, "MAXIMUM") # Aggregate cells by maximum to preserve max heights
 this.save(heights)
-this = Float(heights) * scaled_heights  # scale heights 
+this = Float(heights) * scale_height  # scale heights 
 this.save(scaled_heights)
 arcpy.DefineProjection_management(scaled_heights, projection)
-this = ExtractByMask(scaled_heights, bnd_zones) # Extract scaled
+this = ExtractByMask(scaled_heights, bnd_zones_rast) # Extract scaled
 this.save(scaled_heights)
 
 #DEM
@@ -321,7 +351,7 @@ this.save(dem)
 this = Float(dem) * scale_height
 this.save(scaled_dem)
 arcpy.DefineProjection_management(scaled_dem, projection)
-his = ExtractByMask(scaled_dem, bnd_zones)
+his = ExtractByMask(scaled_dem, bnd_zones_rast)
 this.save(scaled_dem)
 #-----------------------------------------------
 #-----------------------------------------------
